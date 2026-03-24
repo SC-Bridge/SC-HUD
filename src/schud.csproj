@@ -33,4 +33,9 @@
         <AdditionalFiles Include="PInvoke\NativeMethods.txt" />
     </ItemGroup>
 
+    <ItemGroup>
+        <Resource Include="Assets\logo.png" />
+        <EmbeddedResource Include="Assets\icon.ico" />
+    </ItemGroup>
+
 </Project>

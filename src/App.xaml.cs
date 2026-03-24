@@ -118,10 +118,16 @@ public partial class App : Application
             return;
         }
 
-        // Drop the overlay out of topmost so the settings window can sit above it.
-        // WebView2's DirectComposition surface otherwise renders above all other windows.
+        // Move the overlay off-screen while settings is open.
+        // Setting Topmost=false alone leaves a fullscreen transparent WPF window in the
+        // Z-order which interferes with alt-tab and game focus transitions.
+        // Parking it off-screen keeps WebView2 alive (live preview callbacks still apply
+        // CSS) without the window occupying any visible Z-order position.
         if (_overlay is not null)
+        {
             _overlay.Topmost = false;
+            _overlay.Left = -SystemParameters.PrimaryScreenWidth;
+        }
 
         Action<byte>?    preview         = _overlay is not null ? _overlay.ApplyOpacity           : null;
         Action<byte>?    bgPreview       = _overlay is not null ? _overlay.ApplyBackgroundOpacity  : null;
@@ -131,7 +137,13 @@ public partial class App : Application
         _settingsWindow.Closed += (_, _) =>
         {
             if (_overlay is not null)
+            {
+                // Restore position before re-enabling Topmost so the window snaps
+                // back before it can briefly appear in the wrong location.
+                if (_overlay.IsOverlayVisible)
+                    _overlay.Left = 0;
                 _overlay.Topmost = true;
+            }
         };
         _settingsWindow.Show();
     }

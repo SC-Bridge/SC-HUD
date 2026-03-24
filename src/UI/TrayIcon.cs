@@ -1,6 +1,7 @@
 namespace schud.UI;
 
 using System.Drawing;
+using System.Reflection;
 using System.Windows.Forms;
 
 /// <summary>
@@ -16,8 +17,8 @@ public sealed class TrayIcon : IDisposable
 
     public TrayIcon()
     {
-        _iconDefault = CreateCircleIcon(Color.FromArgb(130, 130, 130)); // grey  = idle
-        _iconActive  = CreateCircleIcon(Color.FromArgb(80,  200, 120)); // green = overlay open
+        _iconDefault = LoadEmbeddedIcon();
+        _iconActive  = TintIcon(_iconDefault, Color.FromArgb(80, 200, 120)); // green tint when HUD open
 
         _notifyIcon = new NotifyIcon
         {
@@ -46,10 +47,37 @@ public sealed class TrayIcon : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Icon factory — simple filled circle on transparent background
+    // Icon loading
     // -------------------------------------------------------------------------
 
-    private static Icon CreateCircleIcon(Color color)
+    private static Icon LoadEmbeddedIcon()
+    {
+        var asm    = Assembly.GetExecutingAssembly();
+        var stream = asm.GetManifestResourceStream("schud.Assets.icon.ico");
+        if (stream is null)
+            return CreateFallbackIcon(Color.FromArgb(34, 211, 238)); // cyan fallback
+        return new Icon(stream, 16, 16);
+    }
+
+    // Creates a version of the icon with a coloured overlay — used for the active state.
+    private static Icon TintIcon(Icon source, Color tint)
+    {
+        using var bmp = new Bitmap(16, 16);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.DrawIcon(source, 0, 0);
+            using var brush = new SolidBrush(Color.FromArgb(140, tint));
+            g.FillRectangle(brush, 0, 0, 16, 16);
+        }
+
+        var hIcon = bmp.GetHicon();
+        var icon  = Icon.FromHandle(hIcon);
+        var clone = (Icon)icon.Clone();
+        DestroyIcon(hIcon);
+        return clone;
+    }
+
+    private static Icon CreateFallbackIcon(Color color)
     {
         using var bmp = new Bitmap(16, 16);
         using (var g = Graphics.FromImage(bmp))
@@ -61,9 +89,7 @@ public sealed class TrayIcon : IDisposable
         }
 
         var hIcon = bmp.GetHicon();
-        var icon = Icon.FromHandle(hIcon);
-
-        // Clone so we can destroy the GDI handle immediately
+        var icon  = Icon.FromHandle(hIcon);
         var clone = (Icon)icon.Clone();
         DestroyIcon(hIcon);
         return clone;
