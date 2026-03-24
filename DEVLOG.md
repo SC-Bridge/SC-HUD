@@ -49,3 +49,19 @@
 - `.gitignore` expanded to exclude `bin/`, `obj/`, `.idea/`, `.vs/`, `.claude/`,
   `.codereview/`.
 - All 33 source files committed and pushed to `https://github.com/Diftic/OverLayer`.
+
+---
+
+## 2026-03-24 — Repository migrated to SC-Bridge/SC-HUD
+
+### Changes
+
+**Repository setup**
+- Source moved to `https://github.com/SC-Bridge/SC-HUD`.
+- `.gitignore` created at repo root excluding `bin/`, `obj/`, `.vs/`, `.idea/`.
+- 24 source files committed and pushed (source only — no build artifacts).
+
+**Build artifacts removed**
+- `bin/` and `obj/` directories deleted from local disk.
+- Included outdated `OverLayer.exe` (publish build, several patches behind)
+  and all compiled dependencies — none of these belong in source control.
