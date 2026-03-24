@@ -32,7 +32,6 @@ public partial class OverlayWindow : Window
     private bool _webViewReady;
     private bool _isVisible;
     private bool _navigationErrorShown;
-    private HWND _previousForegroundHwnd;
     private double _opacity  = 1.0;
     private int    _zoomPct  = 100;
 
@@ -94,12 +93,17 @@ public partial class OverlayWindow : Window
         _mouseHookThread = new Thread(RunMouseHook) { IsBackground = true, Name = "MouseHook" };
         _mouseHookThread.Start();
 
-        // Hide from Alt+Tab.
+        // Hide from Alt+Tab (WS_EX_TOOLWINDOW) and prevent the overlay from ever
+        // stealing Win32 activation (WS_EX_NOACTIVATE).  Without NOACTIVATE the
+        // overlay becomes the active window on ShowOverlay(), so pressing Alt+Tab
+        // switches away from the HUD rather than the game.  With NOACTIVATE the
+        // game window stays active at all times — Alt+Tab minimises the game as
+        // expected, and WebView2 still receives mouse events normally.
         var exStyle = PInvoke.GetWindowLong(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
         PInvoke.SetWindowLong(
             _hwnd,
             WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE,
-            exStyle | (int)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW);
+            exStyle | (int)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW | (int)WINDOW_EX_STYLE.WS_EX_NOACTIVATE);
 
         ApplyOpacity(_settings.Current.OverlayOpacity);
         ApplyBackgroundOpacity(_settings.Current.BackgroundOpacity);
@@ -134,34 +138,16 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        // Remember what had focus so we can return to it on hide.
-        _previousForegroundHwnd = PInvoke.GetForegroundWindow();
-
         CoverPrimaryScreen();
 
         _isVisible = true;
         Visibility = Visibility.Visible;
-        // First synchronous layout pass — gets WPF layout moving.
         UpdateLayout();
 
-        // Bring the overlay to the foreground by temporarily sharing input state with
-        // whatever window currently owns it.  AttachThreadInput is the most reliable
-        // way to do this — SetForegroundWindow alone is silently ignored when the
-        // calling thread does not own the foreground lock.
-        ForceToForeground();
-
-        // Deferred pass: wait for WPF to process WM_SETFOCUS and for the
-        // WebView2 HwndHost to catch up on the resize, then give it focus
-        // and snap the cursor to the centre (needs accurate ActualWidth/Height).
-        Dispatcher.InvokeAsync(() =>
-        {
-            if (!_isVisible) return;
-            UpdateLayout();
-            var wpfFocused = WebView.Focus();
-            _logger.LogDebug("ShowOverlay (deferred): WebView.Focus() returned {Result}", wpfFocused);
-            var center = PointToScreen(new Point(ActualWidth / 2, ActualHeight / 2));
-            PInvoke.SetCursorPos((int)center.X, (int)center.Y);
-        }, System.Windows.Threading.DispatcherPriority.Render);
+        // WS_EX_NOACTIVATE means the overlay never steals Win32 activation, so the
+        // game window remains the foreground window at all times.  Alt+Tab therefore
+        // acts on the game, not the HUD.  WebView2 still receives mouse events
+        // normally without needing explicit focus or cursor-centering.
 
         OverlayShown?.Invoke(this, EventArgs.Empty);
         _logger.LogDebug("Overlay shown");
@@ -171,11 +157,6 @@ public partial class OverlayWindow : Window
     {
         _isVisible = false;
         Visibility = Visibility.Collapsed;
-
-        if (_previousForegroundHwnd != HWND.Null && PInvoke.IsWindow(_previousForegroundHwnd))
-            PInvoke.SetForegroundWindow(_previousForegroundHwnd);
-
-        _previousForegroundHwnd = HWND.Null;
         OverlayHidden?.Invoke(this, EventArgs.Empty);
         _logger.LogDebug("Overlay hidden");
     }
