@@ -5,15 +5,15 @@
         WindowStyle="None"
         ShowInTaskbar="False"
         Topmost="True"
+        ShowActivated="False"
         AllowsTransparency="True"
         WindowStartupLocation="Manual"
         Visibility="Collapsed"
         Title="SC HUD">
     <Window.Background>
-        <!-- Near-zero opacity prevents WPF from treating the window as
-             fully transparent, which would cause clicks to fall through
-             the WebView2 content. Must NOT be zero. -->
-        <SolidColorBrush Color="#010000" Opacity="0.05"/>
+        <!-- Opacity is user-configurable via Settings → Background Opacity.
+             Must NOT be zero — fully transparent areas click-through in WPF. -->
+        <SolidColorBrush x:Name="OverlayBg" Color="#1a1a1a" Opacity="0.05"/>
     </Window.Background>
 
     <Grid>

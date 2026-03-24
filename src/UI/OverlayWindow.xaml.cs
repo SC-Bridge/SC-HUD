@@ -93,17 +93,15 @@ public partial class OverlayWindow : Window
         _mouseHookThread = new Thread(RunMouseHook) { IsBackground = true, Name = "MouseHook" };
         _mouseHookThread.Start();
 
-        // Hide from Alt+Tab (WS_EX_TOOLWINDOW) and prevent the overlay from ever
-        // stealing Win32 activation (WS_EX_NOACTIVATE).  Without NOACTIVATE the
-        // overlay becomes the active window on ShowOverlay(), so pressing Alt+Tab
-        // switches away from the HUD rather than the game.  With NOACTIVATE the
-        // game window stays active at all times — Alt+Tab minimises the game as
-        // expected, and WebView2 still receives mouse events normally.
+        // Hide from Alt+Tab.  Activation prevention is handled in WndProc via
+        // WM_MOUSEACTIVATE → MA_NOACTIVATE, and in XAML via ShowActivated="False".
+        // WS_EX_NOACTIVATE is intentionally NOT set — it causes Chromium to throttle
+        // WebView2 rendering as if the window were a background process (severe lag).
         var exStyle = PInvoke.GetWindowLong(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
         PInvoke.SetWindowLong(
             _hwnd,
             WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE,
-            exStyle | (int)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW | (int)WINDOW_EX_STYLE.WS_EX_NOACTIVATE);
+            exStyle | (int)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW);
 
         ApplyOpacity(_settings.Current.OverlayOpacity);
         ApplyBackgroundOpacity(_settings.Current.BackgroundOpacity);
@@ -410,6 +408,19 @@ public partial class OverlayWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        const int WM_MOUSEACTIVATE = 0x0021;
+        const int MA_NOACTIVATE    = 3;
+
+        // Prevent the overlay from ever becoming the active Win32 window.
+        // ShowActivated="False" covers the Show() path; this covers any subsequent
+        // activation attempt (e.g. SetForegroundWindow, WM_LBUTTONDOWN on the frame).
+        // MA_NOACTIVATE: don't activate, but DO deliver the mouse message to the app.
+        if (msg == WM_MOUSEACTIVATE)
+        {
+            handled = true;
+            return new IntPtr(MA_NOACTIVATE);
+        }
+
         const int WM_MOUSEWHEEL = 0x020A;
         if (msg == WM_MOUSEWHEEL && _webViewReady)
         {
