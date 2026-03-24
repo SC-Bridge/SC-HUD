@@ -15,6 +15,7 @@ public partial class App : Application
     private SettingsWindow? _settingsWindow;
     private OverlayWindow? _overlay;
     private ScAnchorService? _scAnchor;
+    private GlobalHotkeyListener? _listener;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -30,7 +31,8 @@ public partial class App : Application
         await _host.StartAsync();
 
         var settings = _host.Services.GetRequiredService<SettingsManager>();
-        var listener = _host.Services.GetRequiredService<GlobalHotkeyListener>();
+        _listener    = _host.Services.GetRequiredService<GlobalHotkeyListener>();
+        var listener = _listener;
         var overlayLogger = _host.Services.GetRequiredService<ILogger<OverlayWindow>>();
 
         // OverlayWindow must be created on the STA (UI) thread.
@@ -118,6 +120,11 @@ public partial class App : Application
             return;
         }
 
+        // Pause hotkey listener so key captures in the settings hotkey field
+        // don't accidentally toggle the overlay or fire ESC-close.
+        if (_listener is not null)
+            _listener.Paused = true;
+
         // Drop overlay out of topmost so the settings window sits above it.
         // WebView2's DirectComposition surface otherwise renders above all other windows.
         if (_overlay is not null)
@@ -130,6 +137,8 @@ public partial class App : Application
         _settingsWindow = new SettingsWindow(settings, preview, bgPreview, sizePreview, zoomPreview);
         _settingsWindow.Closed += (_, _) =>
         {
+            if (_listener is not null)
+                _listener.Paused = false;
             if (_overlay is not null)
                 _overlay.Topmost = true;
         };

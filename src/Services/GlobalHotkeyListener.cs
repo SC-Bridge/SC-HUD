@@ -37,6 +37,13 @@ public sealed class GlobalHotkeyListener : IHostedService, IDisposable
     private readonly SettingsManager _settings;
     private readonly ILogger<GlobalHotkeyListener> _logger;
 
+    /// <summary>
+    /// When true, all hotkey and escape events are silently suppressed.
+    /// Set this while the settings window is open so key captures in the
+    /// hotkey field don't accidentally toggle the overlay.
+    /// </summary>
+    public bool Paused { get; set; }
+
     public event EventHandler? HotkeyPressed;
     public event EventHandler? EscapePressed;
 
@@ -113,6 +120,14 @@ public sealed class GlobalHotkeyListener : IHostedService, IDisposable
     private void HandleKeyEvent(WPARAM wparam, LPARAM lparam, out bool handled)
     {
         handled = false;
+
+        if (Paused)
+        {
+            // Clear held-key tracking so stale state doesn't accumulate while paused.
+            if (wparam == WinPInvoke.WM_KEYUP || wparam == WinPInvoke.WM_SYSKEYUP)
+                _heldKeys.Clear();
+            return;
+        }
 
         var kbdStruct = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lparam);
         var vk = (VIRTUAL_KEY)kbdStruct.vkCode;
