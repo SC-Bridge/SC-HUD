@@ -14,10 +14,14 @@ public partial class App : Application
     private TrayIcon? _trayIcon;
     private SettingsWindow? _settingsWindow;
     private OverlayWindow? _overlay;
+    private ScAnchorService? _scAnchor;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        var splash = new SplashWindow();
+        splash.Show();
 
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(ConfigureServices)
@@ -43,9 +47,21 @@ public partial class App : Application
         overlay.Top    = 0;
         overlay.Show();
 
+        // Update splash with the actual configured hotkey, then keep it visible
+        // until the user presses the hotkey for the first time.
+        splash.SetHotkeyLabel(settings.Current.ToggleHotkey.ToString());
+
         // Tray icon
         _trayIcon = new TrayIcon();
         _trayIcon.ExitRequested += (_, _) => Dispatcher.Invoke(Shutdown);
+
+        // First hotkey press closes the splash; subsequent presses just toggle.
+        void OnFirstHotkey(object? s, EventArgs _)
+        {
+            Dispatcher.Invoke(splash.Close);
+            listener.HotkeyPressed -= OnFirstHotkey;
+        }
+        listener.HotkeyPressed += OnFirstHotkey;
 
         // Hotkey → toggle overlay; tray icon reflects overlay state
         listener.HotkeyPressed      += (_, _) => Dispatcher.Invoke(overlay.Toggle);
@@ -53,10 +69,36 @@ public partial class App : Application
         overlay.OverlayShown        += (_, _) => _trayIcon.SetActive(true);
         overlay.OverlayHidden       += (_, _) => _trayIcon.SetActive(false);
         overlay.BalloonTipRequested += (title, msg) => _trayIcon.ShowBalloon(title, msg);
+
+        // ESC closes the overlay (hidden feature — key is not suppressed so the game still receives it).
+        listener.EscapePressed += (_, _) => Dispatcher.Invoke(overlay.EnsureHidden);
+
+        // SC anchor — hide/restore the overlay in sync with the Star Citizen window.
+        // Must be started on the UI thread so WINEVENT_OUTOFCONTEXT callbacks arrive here.
+        var anchorLogger = _host.Services.GetRequiredService<ILogger<ScAnchorService>>();
+        _scAnchor = new ScAnchorService(anchorLogger);
+
+        bool _restoreOnScRestore = false;
+        _scAnchor.GameMinimized += (_, _) => Dispatcher.Invoke(() =>
+        {
+            _restoreOnScRestore = overlay.IsOverlayVisible;
+            overlay.EnsureHidden();
+        });
+        _scAnchor.GameRestored += (_, _) => Dispatcher.Invoke(() =>
+        {
+            if (_restoreOnScRestore)
+            {
+                _restoreOnScRestore = false;
+                overlay.EnsureVisible();
+            }
+        });
+
+        _scAnchor.Start();
     }
 
     protected override async void OnExit(ExitEventArgs e)
     {
+        _scAnchor?.Dispose();
         _trayIcon?.Dispose();
 
         if (_host is not null)
@@ -81,10 +123,11 @@ public partial class App : Application
         if (_overlay is not null)
             _overlay.Topmost = false;
 
-        Action<byte>?    preview     = _overlay is not null ? _overlay.ApplyOpacity : null;
-        Action<int,int>? sizePreview = _overlay is not null ? _overlay.ApplySize    : null;
-        Action<int>?     zoomPreview = _overlay is not null ? _overlay.ApplyZoom    : null;
-        _settingsWindow = new SettingsWindow(settings, preview, sizePreview, zoomPreview);
+        Action<byte>?    preview         = _overlay is not null ? _overlay.ApplyOpacity           : null;
+        Action<byte>?    bgPreview       = _overlay is not null ? _overlay.ApplyBackgroundOpacity  : null;
+        Action<int,int>? sizePreview     = _overlay is not null ? _overlay.ApplySize               : null;
+        Action<int>?     zoomPreview     = _overlay is not null ? _overlay.ApplyZoom               : null;
+        _settingsWindow = new SettingsWindow(settings, preview, bgPreview, sizePreview, zoomPreview);
         _settingsWindow.Closed += (_, _) =>
         {
             if (_overlay is not null)

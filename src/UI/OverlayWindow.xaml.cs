@@ -1,6 +1,7 @@
 namespace schud.UI;
 
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ using Models;
 using Settings;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.UI.Input.KeyboardAndMouse;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 public partial class OverlayWindow : Window
@@ -17,6 +19,15 @@ public partial class OverlayWindow : Window
     private readonly ILogger<OverlayWindow> _logger;
 
     private HWND _hwnd;
+    private HWND _chromeHwnd; // cached WebView2 Chrome child HWND for scroll forwarding
+
+    // Global low-level mouse hook — intercepts WM_MOUSEWHEEL regardless of focus
+    private UnhookWindowsHookExSafeHandle? _mouseHookHandle;
+    private HHOOK _mouseHookId = HHOOK.Null;
+    private HOOKPROC? _mouseHookProc;
+    private Thread? _mouseHookThread;
+    private uint _mouseHookThreadId;
+
     private CoreWebView2Environment? _env;
     private bool _webViewReady;
     private bool _isVisible;
@@ -50,6 +61,14 @@ public partial class OverlayWindow : Window
             ShowOverlay();
     }
 
+    public bool IsOverlayVisible => _isVisible;
+
+    public void EnsureVisible()
+    {
+        if (!_isVisible)
+            ShowOverlay();
+    }
+
     public void EnsureHidden()
     {
         if (_isVisible)
@@ -66,6 +85,15 @@ public partial class OverlayWindow : Window
 
         _hwnd = new HWND(new WindowInteropHelper(this).Handle);
 
+        // WndProc hook — catches WM_MOUSEWHEEL when the overlay window itself has focus.
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
+
+        // Global WH_MOUSE_LL hook — intercepts WM_MOUSEWHEEL regardless of which window
+        // has focus, so scrolling works even when the game holds the foreground lock.
+        _mouseHookProc = MouseHookProc;
+        _mouseHookThread = new Thread(RunMouseHook) { IsBackground = true, Name = "MouseHook" };
+        _mouseHookThread.Start();
+
         // Hide from Alt+Tab.
         var exStyle = PInvoke.GetWindowLong(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
         PInvoke.SetWindowLong(
@@ -74,6 +102,7 @@ public partial class OverlayWindow : Window
             exStyle | (int)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW);
 
         ApplyOpacity(_settings.Current.OverlayOpacity);
+        ApplyBackgroundOpacity(_settings.Current.BackgroundOpacity);
     }
 
     protected override async void OnContentRendered(EventArgs e)
@@ -85,6 +114,11 @@ public partial class OverlayWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _settings.SettingsChanged -= OnSettingsChanged;
+
+        if (_mouseHookThreadId != 0)
+            PInvoke.PostThreadMessage(_mouseHookThreadId, PInvoke.WM_QUIT, 0, 0);
+        _mouseHookHandle?.Dispose();
+
         base.OnClosed(e);
     }
 
@@ -150,11 +184,20 @@ public partial class OverlayWindow : Window
     // Settings hot-reload
     // -------------------------------------------------------------------------
 
+    public void ApplyBackgroundOpacity(byte value)
+    {
+        // Clamp to 1 minimum so the window is never fully transparent
+        // (fully transparent WPF windows lose hit-testing for non-WebView2 areas).
+        OverlayBg.Opacity = Math.Max((byte)1, value) / 255.0;
+        _logger.LogDebug("ApplyBackgroundOpacity: byte={Value}", value);
+    }
+
     private void OnSettingsChanged(object? sender, SchudSettings settings)
     {
         Dispatcher.Invoke(() =>
         {
             ApplyOpacity(settings.OverlayOpacity);
+            ApplyBackgroundOpacity(settings.BackgroundOpacity);
             ApplyZoom(settings.WebViewZoomPct);
             ApplySize(settings.WebViewWidthPct, settings.WebViewHeightPct);
 
@@ -270,16 +313,15 @@ public partial class OverlayWindow : Window
     //   1. Forces html/body background to transparent — clears any site-set root background.
     //   2. Sets opacity on html — fades all rendered content including their own backgrounds.
     //   3. Sets zoom on html — scales all content proportionally.
-    //   4. Clamps html/body to the viewport — prevents zoomed content from overflowing
-    //      past screen edges (overflow:hidden clips at the WebView2 boundary).
+    // Overflow is intentionally NOT set — the WebView2 HWND boundary clips content at the
+    // screen edge without CSS, and overflow:hidden/clip on html/body disables page scrolling.
     // Using !important so site stylesheets cannot override any rule.
     private static string BuildOverlayStyleScript(double opacity, int zoomPct) =>
         $"(function(){{" +
         $"var s=document.getElementById('__ol_style');" +
         $"if(!s){{s=document.createElement('style');s.id='__ol_style';" +
         $"(document.head||document.documentElement).appendChild(s);}}" +
-        $"s.textContent='html,body{{background:transparent!important;overflow:hidden!important;" +
-        $"max-width:100vw!important;max-height:100vh!important}}" +
+        $"s.textContent='html,body{{background:transparent!important}}" +
         $"html{{opacity:{opacity:F3}!important;zoom:{zoomPct}%!important}}';" +
         $"}})();";
 
@@ -289,16 +331,142 @@ public partial class OverlayWindow : Window
         "var b=document.createElement('div');" +
         "b.id='__ol_settings_btn';" +
         "b.textContent='\u2699';" +
-        "b.style.cssText='position:fixed;bottom:14px;right:14px;width:36px;height:36px;" +
-            "background:rgba(0,0,0,0.45);color:white;font-size:20px;" +
+        "b.style.cssText='position:fixed;bottom:14px;right:14px;width:108px;height:108px;" +
+            "background:rgba(0,0,0,0.45);color:red;font-size:60px;" +
             "display:flex;align-items:center;justify-content:center;" +
-            "border-radius:6px;cursor:pointer;z-index:2147483647;" +
-            "opacity:0.4;transition:opacity 0.15s;user-select:none;';" +
+            "border-radius:18px;cursor:pointer;z-index:2147483647;" +
+            "opacity:0.6;transition:opacity 0.15s;user-select:none;';" +
         "b.addEventListener('mouseover',function(){b.style.opacity='1';});" +
         "b.addEventListener('mouseout',function(){b.style.opacity='0.4';});" +
         "b.addEventListener('click',function(){window.chrome.webview.postMessage('open-settings');});" +
         "document.body.appendChild(b);" +
         "})();";
+
+    // -------------------------------------------------------------------------
+    // Global mouse hook — WH_MOUSE_LL intercepts WM_MOUSEWHEEL system-wide.
+    // This handles the case where the game (or any other window) holds Win32
+    // focus when the overlay is visible, causing WM_MOUSEWHEEL to bypass the
+    // overlay entirely.  We PostMessage the wheel event directly to the Chrome
+    // HWND so WebView2 receives and scrolls it natively.
+    // -------------------------------------------------------------------------
+
+    private void RunMouseHook()
+    {
+        _mouseHookThreadId = PInvoke.GetCurrentThreadId();
+
+        var handle = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_MOUSE_LL, _mouseHookProc!, default, 0);
+        if (handle.IsInvalid)
+        {
+            _logger.LogWarning("Failed to install mouse hook");
+            return;
+        }
+
+        _mouseHookHandle = handle;
+        _mouseHookId = new HHOOK(handle.DangerousGetHandle());
+        _logger.LogInformation("Mouse hook installed");
+
+        while (PInvoke.GetMessage(out var msg, HWND.Null, 0, 0))
+        {
+            PInvoke.TranslateMessage(in msg);
+            PInvoke.DispatchMessage(in msg);
+        }
+    }
+
+    private LRESULT MouseHookProc(int nCode, WPARAM wparam, LPARAM lparam)
+    {
+        const uint WM_MOUSEWHEEL = 0x020A;
+
+        if (nCode >= 0 && (uint)wparam.Value == WM_MOUSEWHEEL && _isVisible && _webViewReady)
+        {
+            var hs = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lparam);
+
+            // HIWORD of mouseData is the signed wheel delta (±120 per notch).
+            // Positive = scroll up, negative = scroll down.
+            short delta = (short)(hs.mouseData >> 16);
+
+            // Convert to CSS pixels: negate because scrollBy(0, +N) scrolls DOWN.
+            int scrollPx = -(delta / 120) * 100;
+
+            int cx = hs.pt.X;
+            int cy = hs.pt.Y;
+
+            _logger.LogDebug("MouseHook scroll: delta={D} px={P} at ({X},{Y})", delta, scrollPx, cx, cy);
+
+            // Dispatch JS scroll to UI thread — no HWND hunting needed.
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (!_webViewReady) return;
+
+                // Walk up from element under cursor to find the nearest scrollable
+                // container, then fall back to document scroll.
+                var script =
+                    $"(function(){{" +
+                    $"var el=document.elementFromPoint({cx},{cy});" +
+                    $"while(el&&el!==document.documentElement){{" +
+                    $"var s=window.getComputedStyle(el);" +
+                    $"var ov=s.overflowY;" +
+                    $"if((ov==='auto'||ov==='scroll')&&el.scrollHeight>el.clientHeight){{" +
+                    $"el.scrollTop+={scrollPx};return;" +
+                    $"}}" +
+                    $"el=el.parentElement;}}" +
+                    $"window.scrollBy(0,{scrollPx});" +
+                    $"}})();";
+
+                _ = WebView.CoreWebView2.ExecuteScriptAsync(script);
+            });
+
+            return (LRESULT)1; // consume — JS handles it
+        }
+
+        return PInvoke.CallNextHookEx(_mouseHookId, nCode, wparam, lparam);
+    }
+
+    // -------------------------------------------------------------------------
+    // Scroll forwarding — WPF HwndHost swallows WM_MOUSEWHEEL before it reaches
+    // the hosted WebView2 HWND.  We hook the overlay's WndProc, find the Chrome
+    // child window (created by WebView2), and SendMessage the wheel event there.
+    // -------------------------------------------------------------------------
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_MOUSEWHEEL = 0x020A;
+        if (msg == WM_MOUSEWHEEL && _webViewReady)
+        {
+            // Lazily locate the Chrome child HWND the first time we need it.
+            if (_chromeHwnd == HWND.Null)
+                _chromeHwnd = FindChromeChildHwnd(_hwnd);
+
+            if (_chromeHwnd != HWND.Null)
+            {
+                PInvoke.SendMessage(_chromeHwnd, (uint)WM_MOUSEWHEEL, (nuint)(nint)wParam, lParam);
+                handled = true;
+            }
+        }
+        return IntPtr.Zero;
+    }
+
+    private static unsafe HWND FindChromeChildHwnd(HWND parent)
+    {
+        HWND found = HWND.Null;
+        var sb = new System.Text.StringBuilder(256);
+
+        PInvoke.EnumChildWindows(parent, (child, _) =>
+        {
+            sb.Clear();
+            GetWindowClassName((nint)child.Value, sb, sb.Capacity);
+            if (sb.ToString().Contains("Chrome", StringComparison.OrdinalIgnoreCase))
+            {
+                found = child;
+                return false; // stop enumeration
+            }
+            return true;
+        }, 0);
+
+        return found;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetClassNameW")]
+    private static extern int GetWindowClassName(nint hwnd, System.Text.StringBuilder lpClassName, int nMaxCount);
 
     // -------------------------------------------------------------------------
     // Positioning

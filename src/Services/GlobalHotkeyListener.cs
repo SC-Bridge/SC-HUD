@@ -38,6 +38,7 @@ public sealed class GlobalHotkeyListener : IHostedService, IDisposable
     private readonly ILogger<GlobalHotkeyListener> _logger;
 
     public event EventHandler? HotkeyPressed;
+    public event EventHandler? EscapePressed;
 
     public GlobalHotkeyListener(SettingsManager settings, ILogger<GlobalHotkeyListener> logger)
     {
@@ -145,6 +146,10 @@ public sealed class GlobalHotkeyListener : IHostedService, IDisposable
             handled = true;
             return;
         }
+
+        // ESC alone closes the HUD (hidden feature — does not suppress the key).
+        if (vk == VIRTUAL_KEY.VK_ESCAPE && _heldKeys.Count == 1)
+            EscapePressed?.Invoke(this, EventArgs.Empty);
 
         _heldKeys.Remove(vk);
     }
