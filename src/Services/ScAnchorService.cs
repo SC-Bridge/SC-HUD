@@ -6,16 +6,14 @@ using Microsoft.Extensions.Logging;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Accessibility; // WINEVENTPROC
-using Windows.Win32.UI.WindowsAndMessaging;
 
 /// <summary>
 ///     Monitors the Star Citizen game window and keeps the HUD in sync.
 ///
-///     In windowed/maximised mode alt-tab does not send a minimize event — it
-///     simply changes the foreground window.  When that happens this service
-///     explicitly minimises the SC window so that alt-tabbing tucks both the
-///     game and the HUD away to the taskbar together.  Restoring SC from the
-///     taskbar raises EVENT_SYSTEM_MINIMIZEEND which triggers HUD restore.
+///     When SC loses the foreground (alt-tab, task-switch) the HUD is hidden.
+///     When SC regains the foreground the HUD is restored.  SC itself is left
+///     in its current window state — borderless/windowed stays maximised.
+///     Manual minimise/restore is also handled via MINIMIZESTART/END events.
 /// </summary>
 /// <remarks>
 ///     Must be started on the WPF UI thread; WINEVENT_OUTOFCONTEXT delivers
@@ -95,19 +93,9 @@ public sealed class ScAnchorService : IDisposable
         }
         else if (!IsOwnProcess(hwnd))
         {
-            // An external app gained foreground.
-            // In windowed-maximised mode SC does not minimise itself on alt-tab —
-            // we do it here so both SC and the HUD disappear to the taskbar together.
-            if (_scHwnd != HWND.Null && PInvoke.IsWindow(_scHwnd))
-            {
-                _logger.LogDebug("SC lost foreground — minimising SC window");
-                PInvoke.ShowWindow(_scHwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
-            }
-            else
-            {
-                _logger.LogDebug("SC lost foreground to external window");
-            }
-
+            // An external app gained foreground — hide the HUD.
+            // SC is left in its current state (borderless/windowed stays maximised).
+            _logger.LogDebug("SC lost foreground to external window");
             GameMinimized?.Invoke(this, EventArgs.Empty);
         }
         // Foreground changed to our own process (settings window) — do nothing.
