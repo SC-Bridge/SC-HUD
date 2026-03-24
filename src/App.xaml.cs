@@ -83,7 +83,14 @@ public partial class App : Application
         bool _restoreOnScRestore = false;
         _scAnchor.GameMinimized += (_, _) => Dispatcher.Invoke(() =>
         {
-            _restoreOnScRestore = overlay.IsOverlayVisible;
+            // Only capture visibility on the FIRST GameMinimized in a cycle.
+            // OnForegroundChanged fires one event then calls ShowWindow(SW_MINIMIZE),
+            // which causes EVENT_SYSTEM_MINIMIZESTART to fire a second GameMinimized.
+            // By the time the second fires, EnsureHidden() has already run and
+            // IsOverlayVisible is false — overwriting _restoreOnScRestore with false
+            // would prevent the HUD from being restored when SC comes back.
+            if (!_restoreOnScRestore)
+                _restoreOnScRestore = overlay.IsOverlayVisible;
             overlay.EnsureHidden();
         });
         _scAnchor.GameRestored += (_, _) => Dispatcher.Invoke(() =>
