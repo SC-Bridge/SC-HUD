@@ -142,10 +142,10 @@ public partial class OverlayWindow : Window
         Visibility = Visibility.Visible;
         UpdateLayout();
 
-        // WS_EX_NOACTIVATE means the overlay never steals Win32 activation, so the
-        // game window remains the foreground window at all times.  Alt+Tab therefore
-        // acts on the game, not the HUD.  WebView2 still receives mouse events
-        // normally without needing explicit focus or cursor-centering.
+        // Re-inject styles every time the overlay is shown — guards against the CSS
+        // being lost (e.g. after a RestartNavigation that completed while hidden).
+        _ = WebView.CoreWebView2.ExecuteScriptAsync(BuildOverlayStyleScript(_opacity, _zoomPct));
+        _ = WebView.CoreWebView2.ExecuteScriptAsync(BuildSettingsButtonScript());
 
         OverlayShown?.Invoke(this, EventArgs.Empty);
         _logger.LogDebug("Overlay shown");
@@ -182,8 +182,11 @@ public partial class OverlayWindow : Window
 
             if (_webViewReady)
             {
-                var current = WebView.CoreWebView2.Source;
-                if (!string.Equals(current, settings.OverlayUrl, StringComparison.OrdinalIgnoreCase))
+                // Compare by origin only (scheme + host), not the full URL.
+                // CoreWebView2.Source includes the current path/hash which changes as the
+                // user browses within the site — a full-string compare fires RestartNavigation
+                // on every settings save even when the configured host hasn't changed.
+                if (!SameOrigin(WebView.CoreWebView2.Source, settings.OverlayUrl))
                     RestartNavigation(settings.OverlayUrl);
             }
         });
@@ -196,6 +199,15 @@ public partial class OverlayWindow : Window
         WebView.CoreWebView2.Stop();
         WebView.CoreWebView2.Navigate(url);
         _logger.LogInformation("WebView2 restarted — navigating to {Url}", url);
+    }
+
+    private static bool SameOrigin(string a, string b)
+    {
+        if (!Uri.TryCreate(a, UriKind.Absolute, out var ua)) return false;
+        if (!Uri.TryCreate(b, UriKind.Absolute, out var ub)) return false;
+        return string.Equals(ua.Scheme, ub.Scheme, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(ua.Host,   ub.Host,   StringComparison.OrdinalIgnoreCase)
+            && ua.Port == ub.Port;
     }
 
     // -------------------------------------------------------------------------
