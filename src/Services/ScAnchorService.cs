@@ -6,23 +6,20 @@ using Microsoft.Extensions.Logging;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Accessibility; // WINEVENTPROC
+using Windows.Win32.UI.WindowsAndMessaging;
 
 /// <summary>
-///     Monitors the Star Citizen game window and fires
-///     <see cref="GameMinimized"/> / <see cref="GameRestored"/> when SC
-///     loses or gains the foreground.  The overlay hides/shows in sync so
-///     that alt-tabbing affects both the game and HUD together.
+///     Monitors the Star Citizen game window and keeps the HUD in sync.
+///
+///     In windowed/maximised mode alt-tab does not send a minimize event — it
+///     simply changes the foreground window.  When that happens this service
+///     explicitly minimises the SC window so that alt-tabbing tucks both the
+///     game and the HUD away to the taskbar together.  Restoring SC from the
+///     taskbar raises EVENT_SYSTEM_MINIMIZEEND which triggers HUD restore.
 /// </summary>
 /// <remarks>
-///     Two hooks are used:
-///     - EVENT_SYSTEM_FOREGROUND — fires reliably when any app loses/gains
-///       focus, including full-screen exclusive DirectX titles that don't
-///       send WM_SYSCOMMAND/SC_MINIMIZE on alt-tab.
-///     - EVENT_SYSTEM_MINIMIZESTART/END — fallback for windowed mode where
-///       SC can be minimized independently of foreground changes.
-///
-///     Both must be started on the WPF UI thread so that WINEVENT_OUTOFCONTEXT
-///     callbacks are delivered via the WPF message pump.
+///     Must be started on the WPF UI thread; WINEVENT_OUTOFCONTEXT delivers
+///     callbacks via the calling thread's message pump.
 /// </remarks>
 public sealed class ScAnchorService : IDisposable
 {
@@ -31,11 +28,14 @@ public sealed class ScAnchorService : IDisposable
     private readonly ILogger<ScAnchorService> _logger;
     private readonly uint _ownPid = (uint)Environment.ProcessId;
 
-    // Two delegates + two handles — GC must not collect delegates while hooks are live.
+    // Delegates kept alive — GC must not collect them while hooks are live.
     private WINEVENTPROC? _fgProc;
     private WINEVENTPROC? _minProc;
     private UnhookWinEventSafeHandle? _fgHook;
     private UnhookWinEventSafeHandle? _minHook;
+
+    // Last known SC window handle — used to minimise it on alt-tab.
+    private HWND _scHwnd = HWND.Null;
 
     public event EventHandler? GameMinimized;
     public event EventHandler? GameRestored;
@@ -50,27 +50,23 @@ public sealed class ScAnchorService : IDisposable
     {
         var flags = PInvoke.WINEVENT_OUTOFCONTEXT | PInvoke.WINEVENT_SKIPOWNPROCESS;
 
-        // Foreground hook — catches alt-tab in full-screen exclusive DirectX mode.
         _fgProc  = OnForegroundChanged;
         _fgHook  = PInvoke.SetWinEventHook(
             PInvoke.EVENT_SYSTEM_FOREGROUND,
             PInvoke.EVENT_SYSTEM_FOREGROUND,
             default, _fgProc, 0, 0, flags);
 
-        // Minimize hook — handles windowed/borderless mode where SC minimizes properly.
         _minProc = OnMinimize;
         _minHook = PInvoke.SetWinEventHook(
             PInvoke.EVENT_SYSTEM_MINIMIZESTART,
             PInvoke.EVENT_SYSTEM_MINIMIZEEND,
             default, _minProc, 0, 0, flags);
 
-        var fgOk  = _fgHook  is { IsInvalid: false };
-        var minOk = _minHook is { IsInvalid: false };
-
-        if (fgOk && minOk)
+        var ok = _fgHook is { IsInvalid: false } && _minHook is { IsInvalid: false };
+        if (ok)
             _logger.LogInformation("SC anchor hooks installed — watching for {Process}", ScProcessName);
         else
-            _logger.LogWarning("SC anchor: fg hook={Fg} min hook={Min}", fgOk, minOk);
+            _logger.LogWarning("SC anchor: one or more hooks failed to install");
     }
 
     public void Dispose()
@@ -82,7 +78,7 @@ public sealed class ScAnchorService : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // Foreground callback — most reliable trigger for full-screen exclusive apps.
+    // Foreground callback
     // -------------------------------------------------------------------------
 
     private void OnForegroundChanged(
@@ -93,20 +89,32 @@ public sealed class ScAnchorService : IDisposable
 
         if (IsStarCitizen(hwnd))
         {
+            _scHwnd = hwnd; // keep HWND up to date
             _logger.LogDebug("SC gained foreground");
             GameRestored?.Invoke(this, EventArgs.Empty);
         }
         else if (!IsOwnProcess(hwnd))
         {
-            // Some other app (desktop, taskbar, another game) is now foreground.
-            _logger.LogDebug("SC lost foreground to external window");
+            // An external app gained foreground.
+            // In windowed-maximised mode SC does not minimise itself on alt-tab —
+            // we do it here so both SC and the HUD disappear to the taskbar together.
+            if (_scHwnd != HWND.Null && PInvoke.IsWindow(_scHwnd))
+            {
+                _logger.LogDebug("SC lost foreground — minimising SC window");
+                PInvoke.ShowWindow(_scHwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
+            }
+            else
+            {
+                _logger.LogDebug("SC lost foreground to external window");
+            }
+
             GameMinimized?.Invoke(this, EventArgs.Empty);
         }
-        // If hwnd belongs to our own process (e.g. settings window), do nothing.
+        // Foreground changed to our own process (settings window) — do nothing.
     }
 
     // -------------------------------------------------------------------------
-    // Minimize callback — fallback for windowed mode.
+    // Minimize/restore callback
     // -------------------------------------------------------------------------
 
     private void OnMinimize(
@@ -118,12 +126,14 @@ public sealed class ScAnchorService : IDisposable
 
         if (@event == PInvoke.EVENT_SYSTEM_MINIMIZESTART)
         {
-            _logger.LogDebug("SC window minimized");
+            _scHwnd = hwnd;
+            _logger.LogDebug("SC minimised");
             GameMinimized?.Invoke(this, EventArgs.Empty);
         }
         else if (@event == PInvoke.EVENT_SYSTEM_MINIMIZEEND)
         {
-            _logger.LogDebug("SC window restored");
+            _scHwnd = hwnd;
+            _logger.LogDebug("SC restored");
             GameRestored?.Invoke(this, EventArgs.Empty);
         }
     }
@@ -132,7 +142,6 @@ public sealed class ScAnchorService : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    // Manual import — avoids unsafe context for the out uint parameter.
     [DllImport("user32.dll", SetLastError = false)]
     private static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
