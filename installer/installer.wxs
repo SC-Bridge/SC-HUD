@@ -30,7 +30,7 @@
 
   <Fragment>
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <Files Source="$(var.PublishDir)\**" />
+      <Files Include="$(var.PublishDir)\**" />
     </ComponentGroup>
 
     <Component Id="StartMenuShortcut" Directory="AppMenuFolder">
