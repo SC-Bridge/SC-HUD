@@ -82,14 +82,17 @@
 
 ---
 
-## ADR-008: No Velopack auto-updater in V1
+## ADR-008: Lightweight self-update via GitHub Releases API (no Velopack)
 
-**Decision:** V1 ships as a plain GitHub Releases `.zip` / `.exe`. Auto-update is V2.
+**Decision:** ~~V1 ships as a plain GitHub Releases `.zip` / `.exe`. Auto-update is V2.~~
+**Updated (v0.3.0):** Auto-update shipped in v0.3.0 using a lightweight GitHub Releases API approach, not Velopack.
 
 **Rationale:**
-- Velopack adds complexity (installer, update server, delta packaging)
-- For a utility at this stage, GitHub Releases + manual update is sufficient
-- Velopack can be adopted in V2 without structural changes
+- Velopack adds complexity (installer, update server, delta packaging) that isn't justified at this scale
+- The sc-companion project uses the same pattern successfully — proven approach for this ecosystem
+- Implementation: `UpdateChecker` polls the GitHub releases API on startup; `SelfUpdateService` downloads the `.exe` asset and uses a PowerShell script to swap it after the process exits
+- Update check blocks the splash screen (max 5s timeout) so the user sees the banner on first open if an update is available
+- Velopack remains an option for a future V3 if delta updates or rollback become necessary
 
 ---
 

@@ -21,9 +21,6 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        var splash = new SplashWindow();
-        splash.Show();
-
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(ConfigureServices)
             .Build();
@@ -47,11 +44,18 @@ public partial class App : Application
         overlay.Height = sh;
         overlay.Left   = -sw;
         overlay.Top    = 0;
-        overlay.Show();
+        overlay.Show(); // WebView2 begins initialising in the background
 
-        // Update splash with the actual configured hotkey, then keep it visible
-        // until the user presses the hotkey for the first time.
+        // Check for updates while WebView2 loads; splash waits for the result.
+        var updateLog  = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("UpdateChecker");
+        var splashLog  = _host.Services.GetRequiredService<ILogger<UI.SplashWindow>>();
+        var updateInfo = await Services.UpdateChecker.CheckAsync(updateLog);
+
+        var splash = new UI.SplashWindow(splashLog);
         splash.SetHotkeyLabel(settings.Current.ToggleHotkey.ToString());
+        if (updateInfo.HasUpdate)
+            splash.ShowUpdateBanner(updateInfo);
+        splash.Show();
 
         // Tray icon
         _trayIcon = new TrayIcon();

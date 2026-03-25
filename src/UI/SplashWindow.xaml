@@ -8,13 +8,46 @@
         WindowStartupLocation="CenterScreen"
         ShowInTaskbar="False"
         Topmost="True"
-        Background="#0d1b2a"
-        Cursor="Hand"
-        MouseLeftButtonDown="OnClick">
+        Background="#0d1b2a">
 
     <Grid>
         <!-- Top accent line -->
         <Rectangle Height="3" VerticalAlignment="Top" Fill="#22d3ee"/>
+
+        <!-- Update banner (collapsed until an update is found) -->
+        <Border x:Name="UpdateBanner"
+                Visibility="Collapsed"
+                VerticalAlignment="Top"
+                Margin="0,3,0,0"
+                Background="#0a2318"
+                BorderBrush="#22d3ee"
+                BorderThickness="0,0,0,1"
+                Height="36">
+            <Grid Margin="16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="UpdateLabel"
+                           Grid.Column="0"
+                           FontFamily="Segoe UI"
+                           FontSize="12"
+                           Foreground="#22d3ee"
+                           VerticalAlignment="Center"/>
+                <Button x:Name="UpdateButton"
+                        Grid.Column="1"
+                        Click="OnUpdateClick"
+                        FontFamily="Segoe UI"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Padding="10,4"
+                        Background="#22d3ee"
+                        Foreground="#09131f"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
 
         <!-- Main content -->
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="40,0">

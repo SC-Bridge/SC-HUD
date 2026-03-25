@@ -1,5 +1,46 @@
 # DEVLOG
 
+## 2026-03-25 — Release v0.3.0: auto-update + splash rework
+
+### Changes
+
+**Version bump**
+- `schud.csproj`: `0.2.0` → `0.3.0` across `Version`, `FileVersion`, `AssemblyVersion`.
+
+**Update checker (`src/Services/UpdateChecker.cs`)**
+- New static service; calls `https://api.github.com/repos/SC-Bridge/SC-HUD/releases/latest` on startup.
+- Parses `tag_name`, compares major.minor.patch against the running assembly version.
+- Returns `UpdateInfo { HasUpdate, Version, DownloadUrl }` — resolves the `.exe` asset from the release.
+- 5-second timeout; all exceptions swallowed silently (returns "no update").
+- `User-Agent` header set to `SC-HUD/{version}` for GitHub API compliance.
+- Accepts optional `ILogger?` for structured log output.
+
+**Self-update service (`src/Services/SelfUpdateService.cs`)**
+- New static service; downloads the `.exe` asset to `%TEMP%\schud_update\schud.exe`.
+- Writes a PowerShell script (`update.ps1`) that: waits 2s, copies new exe over current, restarts.
+- Launches the script hidden, then calls the `quit` callback to shut down the running process.
+- Accepts optional `ILogger?`.
+
+**Splash screen rework (`src/UI/SplashWindow.xaml` + `.cs`)**
+- Splash no longer shown immediately on startup; it now waits for the update check to complete first.
+- Update banner added in the top ~36px (below the cyan accent line, above the logo area).
+  - Collapsed by default; shown only when `HasUpdate == true`.
+  - Shows `v{X.Y.Z} available` label + `Update & Restart` button.
+  - On click: button hides, label changes to `Downloading...`, `SelfUpdateService.ApplyAsync` runs.
+  - On failure: label changes to `Update failed — try again`, Retry button re-appears.
+- Click-to-close removed — splash is dismissed by hotkey only (existing behaviour unchanged).
+- `ILogger<SplashWindow>` injected via constructor for structured logging.
+
+**App startup order (`src/App.xaml.cs`)**
+- Overlay now shown off-screen first so WebView2 begins loading in the background.
+- `UpdateChecker.CheckAsync()` runs while WebView2 warms up.
+- Splash created and shown only after the check resolves — already populated with the banner if needed.
+
+**Fallback tag**
+- `v0.2.0-pre-update-check` tag created locally before work began.
+
+---
+
 ## 2026-03-25 — CI: GitHub Actions build workflow + MSI installer
 
 ### Added

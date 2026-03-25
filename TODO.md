@@ -2,8 +2,10 @@
 
 ## Pending
 
+- [ ] **Test update banner** — bump a test release past `v0.3.0` on GitHub to verify the banner appears, downloads, and restarts correctly.
 - [ ] **Test CI pipeline** — push a `v0.3.0` tag to verify the build workflow produces valid `.zip` and `.msi` artifacts on GitHub Actions.
 - [ ] **MSI icon** — add `src/Assets/icon.ico` as the installer icon in `installer.wxs` (WiX `<Icon>` + `<Property Id="ARPPRODUCTICON">`).
+- [ ] **MSI update path** — `SelfUpdateService` replaces the raw `.exe`; if installed via MSI the replacement may fail silently due to `Program Files` write permissions. Investigate and add elevation prompt or MSI re-run path if needed.
 
 ## Known Issues
 

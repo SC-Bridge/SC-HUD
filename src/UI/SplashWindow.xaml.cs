@@ -1,24 +1,56 @@
 namespace schud.UI;
 
+using Microsoft.Extensions.Logging;
+using schud.Services;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 
 public partial class SplashWindow : Window
 {
-    public SplashWindow()
+    private readonly ILogger<SplashWindow> _log;
+    private string _downloadUrl = string.Empty;
+
+    public SplashWindow(ILogger<SplashWindow> logger)
     {
+        _log = logger;
         InitializeComponent();
     }
 
     public void SetHotkeyLabel(string hotkey) => HotkeyLabel.Text = hotkey;
 
-    private void OnClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => Close();
+    public void ShowUpdateBanner(UpdateInfo info)
+    {
+        _downloadUrl        = info.DownloadUrl;
+        UpdateLabel.Text    = $"v{info.Version} available";
+        UpdateButton.Content = "Update & Restart";
+        UpdateBanner.Visibility = Visibility.Visible;
+    }
+
+    private async void OnUpdateClick(object sender, RoutedEventArgs e)
+    {
+        UpdateButton.IsEnabled = false;
+        UpdateLabel.Text       = "Downloading...";
+        UpdateButton.Visibility = Visibility.Collapsed;
+        try
+        {
+            _log.LogInformation("User initiated update — downloading {Url}", _downloadUrl);
+            await SelfUpdateService.ApplyAsync(_downloadUrl, () => Dispatcher.Invoke(Application.Current.Shutdown), _log);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Self-update failed");
+            UpdateLabel.Text        = "Update failed — try again";
+            UpdateButton.Content    = "Retry";
+            UpdateButton.Visibility = Visibility.Visible;
+            UpdateButton.IsEnabled  = true;
+        }
+    }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var hwnd = new WindowInteropHelper(this).Handle;
+        var hwnd  = new WindowInteropHelper(this).Handle;
         var color = 0x00281A0C; // #0c1a28 as COLORREF — matches SettingsWindow caption colour
         DwmSetWindowAttribute(hwnd, 35, ref color, sizeof(int));
     }
