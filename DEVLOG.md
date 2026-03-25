@@ -1,5 +1,48 @@
 # DEVLOG
 
+## 2026-03-25 — v0.3.9–0.3.12: MSI installer polish + MSI update path fix
+
+### MSI installer fixes (v0.3.4–0.3.9)
+
+**WiX 4.x AppFiles generation**
+- WiX 4.0.6 does not support `<Files>` as a child of `<ComponentGroup>` (WiX v5+ feature).
+- Fixed by dynamically generating `AppFiles.wxs` in CI with explicit `<Component>/<File>` per staged artifact.
+- Each `<File>` gets an explicit `Id` attribute (`f_comp_*`) to prevent WiX duplicate-symbol errors when
+  identical DLLs appear in multiple locations (`WebView2Loader.dll` in root and `runtimes\win-x64\native\`).
+- `runtimes\` subdirectory excluded from staging; root copy is sufficient for the self-contained publish.
+
+**Install path selection (v0.3.7)**
+- Added `WixToolset.UI.wixext/4.0.5` to CI (`wix extension add` runs from inside `installer\` so the
+  extension is placed where `wix build` looks: `installer\.wix\extensions\`).
+- `installer.wxs` uses WiX 4 syntax: `<ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />`
+  with `xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"`.
+
+**MIT license on EULA screen (v0.3.9)**
+- Added `installer/license.rtf` with MIT license text.
+- Wired via `<WixVariable Id="WixUILicenseRtf" Value="license.rtf" />` (package-level, not a child of `ui:WixUI`).
+
+### MSI update path fix (v0.3.11)
+
+**Problem**
+- `SelfUpdateService` used a PowerShell exe-swap to replace the running binary.
+- This silently fails for MSI installs because `Program Files` requires elevation to write.
+
+**Fix**
+- `UpdateInfo` gains a `MsiUrl` field; `UpdateChecker` now resolves both the `-portable.exe`
+  and `-setup.msi` assets from the GitHub release.
+- `SelfUpdateService.ApplyAsync` detects whether the running exe is under `Program Files`
+  (`IsMsiInstall()`) and branches:
+  - **MSI install**: downloads `-setup.msi` to `%TEMP%\schud_update\`, runs
+    `msiexec.exe /i <path> /passive /norestart` via `UseShellExecute=true` — Windows handles
+    UAC elevation; `MajorUpgrade` in the WiX definition handles the clean upgrade.
+  - **Portable install**: existing PowerShell exe-swap unchanged.
+- `SplashWindow` now stores the full `UpdateInfo` (was just `_downloadUrl`) and passes it to `ApplyAsync`.
+
+**Confirmed working**: install v0.3.11 MSI → update banner detects v0.3.12 → UAC prompt → passive
+progress bar → app restarts from updated installation.
+
+---
+
 ## 2026-03-25 — Release v0.3.0: auto-update + splash rework
 
 ### Changes
