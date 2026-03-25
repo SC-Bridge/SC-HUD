@@ -45,12 +45,10 @@ jobs:
       - name: Install WiX Toolset
         run: dotnet tool install --global wix
 
-      - name: Install WiX UI extension
-        run: wix extension add WixToolset.UI.wixext
-
       - name: Build MSI installer
         shell: pwsh
         run: |
+          wix extension add WixToolset.UI.wixext
           wix build installer\installer.wxs `
             -ext WixToolset.UI.wixext `
             -o "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
