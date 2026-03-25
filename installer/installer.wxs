@@ -2,14 +2,17 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 
   <Package
-    Name="SC HUD"
+    Name="SC Bridge HUD"
     Version="$(var.ProductVersion)"
     Manufacturer="SC-Bridge"
     UpgradeCode="14718258-65BF-4312-AEFA-812D695AF95F"
     Language="1033"
     Scope="perMachine">
 
-    <MajorUpgrade DowngradeErrorMessage="A newer version of SC HUD is already installed." />
+    <Icon Id="AppIcon.ico" SourceFile="src\Assets\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of SC Bridge HUD is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
     <Feature Id="Main" Title="SC HUD" Level="1">
@@ -36,10 +39,11 @@
     <Component Id="StartMenuShortcut" Directory="AppMenuFolder">
       <Shortcut
         Id="ApplicationShortcut"
-        Name="SC HUD"
+        Name="SC Bridge HUD"
         Description="Star Citizen browser overlay"
         Target="[INSTALLFOLDER]schud.exe"
-        WorkingDirectory="INSTALLFOLDER" />
+        WorkingDirectory="INSTALLFOLDER"
+        Icon="AppIcon.ico" />
       <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
       <RegistryValue
         Root="HKCU"
