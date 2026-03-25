@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
   <Package
     Name="SC Bridge HUD"
@@ -15,8 +16,7 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of SC Bridge HUD is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
-    <UIRef Id="WixUI_InstallDir" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
     <Feature Id="Main" Title="SC Bridge HUD" Level="1">
       <ComponentGroupRef Id="AppFiles" />
