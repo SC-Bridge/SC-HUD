@@ -10,7 +10,55 @@ internal static class SelfUpdateService
 {
     private static readonly HttpClient _http = new();
 
-    public static async Task ApplyAsync(string downloadUrl, Action quit, ILogger? log = null)
+    public static async Task ApplyAsync(UpdateInfo info, Action quit, ILogger? log = null)
+    {
+        if (IsMsiInstall() && !string.IsNullOrEmpty(info.MsiUrl))
+        {
+            log?.LogInformation("MSI install detected — updating via msiexec");
+            await ApplyMsiAsync(info.MsiUrl, quit, log);
+        }
+        else
+        {
+            log?.LogInformation("Portable install detected — updating via exe-swap");
+            await ApplyPortableAsync(info.DownloadUrl, quit, log);
+        }
+    }
+
+    private static bool IsMsiInstall()
+    {
+        var exe  = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+        var pf   = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        return exe.StartsWith(pf,   StringComparison.OrdinalIgnoreCase)
+            || exe.StartsWith(pf86, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task ApplyMsiAsync(string msiUrl, Action quit, ILogger? log)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "schud_update");
+        Directory.CreateDirectory(tempDir);
+        var tempMsi = Path.Combine(tempDir, "schud_update.msi");
+
+        log?.LogInformation("Downloading MSI from {Url}", msiUrl);
+        using var response = await _http.GetAsync(msiUrl, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        await using var src  = await response.Content.ReadAsStreamAsync();
+        await using var dest = File.Create(tempMsi);
+        await src.CopyToAsync(dest);
+        log?.LogInformation("MSI download complete — saved to {Msi}", tempMsi);
+
+        // /passive shows a progress bar; Windows handles UAC elevation for the perMachine install
+        Process.Start(new ProcessStartInfo
+        {
+            FileName        = "msiexec.exe",
+            Arguments       = $"/i \"{tempMsi}\" /passive /norestart",
+            UseShellExecute = true,
+        });
+
+        quit();
+    }
+
+    private static async Task ApplyPortableAsync(string exeUrl, Action quit, ILogger? log)
     {
         var currentExe = Process.GetCurrentProcess().MainModule?.FileName
             ?? Path.Combine(AppContext.BaseDirectory, "schud.exe");
@@ -21,8 +69,8 @@ internal static class SelfUpdateService
         Directory.CreateDirectory(tempDir);
         var tempExe = Path.Combine(tempDir, "schud.exe");
 
-        log?.LogInformation("Downloading update from {Url}", downloadUrl);
-        using var response = await _http.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+        log?.LogInformation("Downloading update from {Url}", exeUrl);
+        using var response = await _http.GetAsync(exeUrl, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
         await using var src  = await response.Content.ReadAsStreamAsync();
         await using var dest = File.Create(tempExe);

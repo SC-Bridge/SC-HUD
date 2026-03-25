@@ -9,7 +9,7 @@ using System.Windows.Interop;
 public partial class SplashWindow : Window
 {
     private readonly ILogger<SplashWindow> _log;
-    private string _downloadUrl = string.Empty;
+    private UpdateInfo _updateInfo = new(false, string.Empty, string.Empty, string.Empty);
 
     public SplashWindow(ILogger<SplashWindow> logger)
     {
@@ -21,7 +21,7 @@ public partial class SplashWindow : Window
 
     public void ShowUpdateBanner(UpdateInfo info)
     {
-        _downloadUrl        = info.DownloadUrl;
+        _updateInfo         = info;
         UpdateLabel.Text    = $"v{info.Version} available";
         UpdateButton.Content = "Update & Restart";
         UpdateBanner.Visibility = Visibility.Visible;
@@ -34,8 +34,8 @@ public partial class SplashWindow : Window
         UpdateButton.Visibility = Visibility.Collapsed;
         try
         {
-            _log.LogInformation("User initiated update — downloading {Url}", _downloadUrl);
-            await SelfUpdateService.ApplyAsync(_downloadUrl, () => Dispatcher.Invoke(Application.Current.Shutdown), _log);
+            _log.LogInformation("User initiated update — version {Ver}", _updateInfo.Version);
+            await SelfUpdateService.ApplyAsync(_updateInfo, () => Dispatcher.Invoke(Application.Current.Shutdown), _log);
         }
         catch (Exception ex)
         {

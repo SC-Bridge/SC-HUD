@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 
-public record UpdateInfo(bool HasUpdate, string Version, string DownloadUrl);
+public record UpdateInfo(bool HasUpdate, string Version, string DownloadUrl, string MsiUrl);
 
 internal static class UpdateChecker
 {
@@ -49,14 +49,19 @@ internal static class UpdateChecker
 
             var exe = release.Assets
                 .FirstOrDefault(a => a.Name.EndsWith("-portable.exe", StringComparison.OrdinalIgnoreCase));
+            var msi = release.Assets
+                .FirstOrDefault(a => a.Name.EndsWith("-setup.msi", StringComparison.OrdinalIgnoreCase));
+
             if (exe is null)
             {
                 log?.LogWarning("Update {Tag} has no .exe asset — skipping", release.TagName);
                 return None;
             }
 
-            log?.LogInformation("Update available: {Tag} — {Url}", release.TagName, exe.BrowserDownloadUrl);
-            return new UpdateInfo(true, release.TagName.TrimStart('v'), exe.BrowserDownloadUrl);
+            log?.LogInformation("Update available: {Tag} — exe: {ExeUrl}, msi: {MsiUrl}",
+                release.TagName, exe.BrowserDownloadUrl, msi?.BrowserDownloadUrl ?? "none");
+            return new UpdateInfo(true, release.TagName.TrimStart('v'),
+                exe.BrowserDownloadUrl, msi?.BrowserDownloadUrl ?? string.Empty);
         }
         catch (Exception ex)
         {
@@ -65,7 +70,7 @@ internal static class UpdateChecker
         }
     }
 
-    private static readonly UpdateInfo None = new(false, string.Empty, string.Empty);
+    private static readonly UpdateInfo None = new(false, string.Empty, string.Empty, string.Empty);
 
     private static (int Maj, int Min, int Pat) Current()
     {
