@@ -72,8 +72,8 @@ public partial class App : Application
         overlay.OverlayHidden       += (_, _) => _trayIcon.SetActive(false);
         overlay.BalloonTipRequested += (title, msg) => _trayIcon.ShowBalloon(title, msg);
 
-        // ESC closes the overlay (hidden feature — key is not suppressed so the game still receives it).
-        listener.EscapePressed += (_, _) => Dispatcher.Invoke(overlay.EnsureHidden);
+        // ESC closes the overlay and returns focus to SC.
+        listener.EscapePressed += (_, _) => Dispatcher.Invoke(overlay.EnsureHiddenRestoring);
 
         // SC anchor — hide/restore the overlay in sync with the Star Citizen window.
         // Must be started on the UI thread so WINEVENT_OUTOFCONTEXT callbacks arrive here.

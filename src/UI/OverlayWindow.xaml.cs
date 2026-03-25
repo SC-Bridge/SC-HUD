@@ -19,7 +19,8 @@ public partial class OverlayWindow : Window
     private readonly ILogger<OverlayWindow> _logger;
 
     private HWND _hwnd;
-    private HWND _chromeHwnd; // cached WebView2 Chrome child HWND for scroll forwarding
+    private HWND _chromeHwnd;  // cached WebView2 Chrome child HWND for scroll forwarding
+    private HWND _prevFgHwnd;  // foreground window captured just before we steal it
 
     // Global low-level mouse hook — intercepts WM_MOUSEWHEEL regardless of focus
     private UnhookWindowsHookExSafeHandle? _mouseHookHandle;
@@ -55,7 +56,7 @@ public partial class OverlayWindow : Window
     public void Toggle()
     {
         if (_isVisible)
-            HideOverlay();
+            HideOverlay(restoreFocus: true);
         else
             ShowOverlay();
     }
@@ -68,10 +69,23 @@ public partial class OverlayWindow : Window
             ShowOverlay();
     }
 
+    /// <summary>
+    /// Hides without restoring foreground to SC — used when an external app
+    /// (alt-tab, task-switch) has already taken the foreground.
+    /// </summary>
     public void EnsureHidden()
     {
         if (_isVisible)
-            HideOverlay();
+            HideOverlay(restoreFocus: false);
+    }
+
+    /// <summary>
+    /// Hides and explicitly returns foreground to SC — used for ESC-close.
+    /// </summary>
+    public void EnsureHiddenRestoring()
+    {
+        if (_isVisible)
+            HideOverlay(restoreFocus: true);
     }
 
     // -------------------------------------------------------------------------
@@ -142,6 +156,12 @@ public partial class OverlayWindow : Window
         Visibility = Visibility.Visible;
         UpdateLayout();
 
+        // Steal the foreground using AttachThreadInput so that Chrome sees
+        // GetActiveWindow() == overlayHwnd and doesn't absorb the first click
+        // for focus establishment.  We capture SC's HWND first so we can
+        // return the foreground when the overlay is hidden.
+        StealForeground();
+
         // Re-inject styles every time the overlay is shown — guards against the CSS
         // being lost (e.g. after a RestartNavigation that completed while hidden).
         _ = WebView.CoreWebView2.ExecuteScriptAsync(BuildOverlayStyleScript(_opacity, _zoomPct));
@@ -151,12 +171,20 @@ public partial class OverlayWindow : Window
         _logger.LogDebug("Overlay shown");
     }
 
-    private void HideOverlay()
+    private void HideOverlay(bool restoreFocus)
     {
         _isVisible = false;
         Visibility = Visibility.Collapsed;
+
+        // Only return foreground to SC when the user explicitly closed the HUD
+        // (F3 / ESC).  When an external app already took the foreground (alt-tab)
+        // we must NOT call SetForegroundWindow — it would yank SC back to the front
+        // and undo the alt-tab.
+        if (restoreFocus && _prevFgHwnd != HWND.Null)
+            PInvoke.SetForegroundWindow(_prevFgHwnd);
+
         OverlayHidden?.Invoke(this, EventArgs.Empty);
-        _logger.LogDebug("Overlay hidden");
+        _logger.LogDebug("Overlay hidden (restoreFocus={R})", restoreFocus);
     }
 
     // -------------------------------------------------------------------------
@@ -213,6 +241,38 @@ public partial class OverlayWindow : Window
     // -------------------------------------------------------------------------
     // Focus helpers
     // -------------------------------------------------------------------------
+
+    private unsafe void StealForeground()
+    {
+        var fg = PInvoke.GetForegroundWindow();
+
+        // Don't capture our own windows as the restore target.
+        if (fg != HWND.Null && !IsOurProcess(fg))
+            _prevFgHwnd = fg;
+
+        // AttachThreadInput lets BringWindowToTop cross the process boundary —
+        // without it Windows silently ignores the call from a non-foreground process.
+        uint fgPid;
+        var fgThread = PInvoke.GetWindowThreadProcessId(fg, &fgPid);
+        var uiThread = PInvoke.GetCurrentThreadId();
+
+        bool attached = fgThread != 0 && fgThread != uiThread
+            && PInvoke.AttachThreadInput(fgThread, uiThread, true);
+
+        PInvoke.BringWindowToTop(_hwnd);
+
+        if (attached)
+            PInvoke.AttachThreadInput(fgThread, uiThread, false);
+
+        _logger.LogDebug("StealForeground: prevFg={Fg:X} attached={Att}", (nint)_prevFgHwnd.Value, attached);
+    }
+
+    private static unsafe bool IsOurProcess(HWND hwnd)
+    {
+        uint pid;
+        PInvoke.GetWindowThreadProcessId(hwnd, &pid);
+        return pid == (uint)Environment.ProcessId;
+    }
 
     private unsafe void ForceToForeground()
     {
@@ -420,20 +480,8 @@ public partial class OverlayWindow : Window
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        const int WM_MOUSEACTIVATE = 0x0021;
-        const int MA_NOACTIVATE    = 3;
-
-        // Prevent the overlay from ever becoming the active Win32 window.
-        // ShowActivated="False" covers the Show() path; this covers any subsequent
-        // activation attempt (e.g. SetForegroundWindow, WM_LBUTTONDOWN on the frame).
-        // MA_NOACTIVATE: don't activate, but DO deliver the mouse message to the app.
-        if (msg == WM_MOUSEACTIVATE)
-        {
-            handled = true;
-            return new IntPtr(MA_NOACTIVATE);
-        }
-
         const int WM_MOUSEWHEEL = 0x020A;
+
         if (msg == WM_MOUSEWHEEL && _webViewReady)
         {
             // Lazily locate the Chrome child HWND the first time we need it.
