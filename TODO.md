@@ -2,4 +2,4 @@
 
 ## Known Issues
 
-- [ ] **HUD overflow on zoom >100%** — When scaling above 100%, the lower HUD boundary extends past the lower screen boundary. HUD max dimensions shall be capped to screen resolution. Current `overflow:hidden` / `max-width:100vw` / `max-height:100vh` CSS mitigation may not fully contain all cases.
+- [ ] **HUD overflow on zoom >100%** — When scaling above 100%, zoomed content can extend past the lower screen boundary. CSS overflow mitigation was removed (it broke scrolling); the WebView2 HWND boundary provides some clipping but does not fully contain all cases. Proper fix: cap overlay dimensions to screen resolution before applying zoom.

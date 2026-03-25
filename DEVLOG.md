@@ -1,5 +1,20 @@
 # DEVLOG
 
+## 2026-03-25 — Release v0.2.0
+
+### Changes
+
+**Version bump**
+- `<Version>0.2.0</Version>` added to `src/schud.csproj` (no version had been defined previously;
+  `v0.1.0` tag already existed on the remote from an earlier push).
+- Tagged `v0.2.0` and pushed to `https://github.com/SC-Bridge/SC-HUD`.
+
+**Build**
+- `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true -o publish`
+- Output: `publish/schud.exe` (~157 MB).
+
+---
+
 ## 2026-03-25 — Fix overlay click-through and alt-tab behaviour
 
 ### Problem
