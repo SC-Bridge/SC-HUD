@@ -32,10 +32,6 @@
   </Fragment>
 
   <Fragment>
-    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <Files Include="stage\**" />
-    </ComponentGroup>
-
     <Component Id="StartMenuShortcut" Directory="AppMenuFolder">
       <Shortcut
         Id="ApplicationShortcut"

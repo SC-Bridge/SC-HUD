@@ -12,9 +12,9 @@
         <AssemblyName>schud</AssemblyName>
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
         <ApplicationManifest>app.manifest</ApplicationManifest>
-        <Version>0.3.2</Version>
-        <FileVersion>0.3.2</FileVersion>
-        <AssemblyVersion>0.3.2.0</AssemblyVersion>
+        <Version>0.3.3</Version>
+        <FileVersion>0.3.3</FileVersion>
+        <AssemblyVersion>0.3.3.0</AssemblyVersion>
         <!-- DPI is configured in app.manifest (PerMonitorV2); suppress WinForms conflict warning -->
         <NoWarn>$(NoWarn);WFO0003</NoWarn>
         <!-- Required for CsWin32 pointer parameters (e.g. GetWindowThreadProcessId) -->

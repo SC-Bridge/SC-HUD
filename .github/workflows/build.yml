@@ -51,8 +51,32 @@ jobs:
           New-Item -ItemType Directory -Path "installer\stage" -Force | Out-Null
           Copy-Item "artifacts\*" "installer\stage\" -Recurse -Force
           Copy-Item "src\Assets\icon.ico" "installer\"
+
+          # Generate AppFiles.wxs — explicit Component/File per staged file (WiX 4.x compatible)
+          $stageDir = Resolve-Path "installer\stage"
+          $files = Get-ChildItem -Path $stageDir -Recurse -File
+          $sb = [System.Text.StringBuilder]::new()
+          [void]$sb.AppendLine('<?xml version="1.0" encoding="UTF-8"?>')
+          [void]$sb.AppendLine('<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">')
+          [void]$sb.AppendLine('  <Fragment>')
+          [void]$sb.AppendLine('    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">')
+          foreach ($f in $files) {
+            $rel = $f.FullName.Substring($stageDir.Path.Length + 1)
+            $id  = 'comp_' + ($rel -replace '[^a-zA-Z0-9]', '_')
+            [void]$sb.AppendLine("      <Component Id=""$id"" Guid=""*"">")
+            [void]$sb.AppendLine("        <File Source=""stage\$rel"" />")
+            [void]$sb.AppendLine("      </Component>")
+          }
+          [void]$sb.AppendLine('    </ComponentGroup>')
+          [void]$sb.AppendLine('  </Fragment>')
+          [void]$sb.AppendLine('</Wix>')
+          $sb.ToString() | Out-File "installer\AppFiles.wxs" -Encoding UTF8
+
+          Write-Host "=== AppFiles.wxs ==="
+          Get-Content "installer\AppFiles.wxs"
+
           cd installer
-          wix build installer.wxs `
+          wix build installer.wxs AppFiles.wxs `
             -o "..\SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
             -arch x64 `
             -define ProductVersion=${{ steps.version.outputs.VERSION }}
