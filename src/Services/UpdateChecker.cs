@@ -48,7 +48,7 @@ internal static class UpdateChecker
             }
 
             var exe = release.Assets
-                .FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(a => a.Name.EndsWith("-portable.exe", StringComparison.OrdinalIgnoreCase));
             if (exe is null)
             {
                 log?.LogWarning("Update {Tag} has no .exe asset — skipping", release.TagName);

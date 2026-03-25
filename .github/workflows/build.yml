@@ -36,10 +36,10 @@ jobs:
             -p:Version=${{ steps.version.outputs.VERSION }} \
             -o artifacts
 
-      - name: Prepare portable zip
+      - name: Prepare portable exe
         shell: pwsh
         run: |
-          Compress-Archive -Path artifacts\* -DestinationPath "schud-${{ steps.version.outputs.VERSION }}-portable.zip"
+          Copy-Item "artifacts\schud.exe" "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe"
 
       - name: Install WiX Toolset
         run: dotnet tool install --global wix
@@ -48,7 +48,7 @@ jobs:
         shell: pwsh
         run: |
           wix build installer\installer.wxs `
-            -o "schud-${{ steps.version.outputs.VERSION }}-setup.msi" `
+            -o "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
             -arch x64 `
             -define ProductVersion=${{ steps.version.outputs.VERSION }} `
             -define PublishDir=artifacts
@@ -60,8 +60,8 @@ jobs:
         with:
           name: unsigned-binaries
           path: |
-            schud-${{ steps.version.outputs.VERSION }}-portable.zip
-            schud-${{ steps.version.outputs.VERSION }}-setup.msi
+            SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe
+            SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi
 
       # SignPath code signing (skipped until SIGNPATH_ORGANIZATION_ID is configured)
       - name: Sign artifacts with SignPath
@@ -87,16 +87,16 @@ jobs:
           } else {
             Write-Host "Using unsigned artifacts (signing not configured)"
             New-Item -ItemType Directory -Path "release" -Force | Out-Null
-            Copy-Item "schud-${{ steps.version.outputs.VERSION }}-portable.zip" "release\"
-            Copy-Item "schud-${{ steps.version.outputs.VERSION }}-setup.msi" "release\"
+            Copy-Item "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe" "release\"
+            Copy-Item "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" "release\"
           }
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/schud-${{ steps.version.outputs.VERSION }}-portable.zip
-            release/schud-${{ steps.version.outputs.VERSION }}-setup.msi
+            release/SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe
+            release/SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi
           generate_release_notes: true
           draft: false
         env:
