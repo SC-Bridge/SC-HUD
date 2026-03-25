@@ -46,7 +46,7 @@ jobs:
         run: dotnet tool install --global wix
 
       - name: Install WiX UI extension
-        run: wix extension add WixToolset.UI.wixext --global
+        run: wix extension add WixToolset.UI.wixext
 
       - name: Build MSI installer
         shell: pwsh
