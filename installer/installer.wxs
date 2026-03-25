@@ -9,16 +9,13 @@
     Language="1033"
     Scope="perMachine">
 
-    <Icon Id="AppIcon.ico" SourceFile="src\Assets\icon.ico" />
+    <Icon Id="AppIcon.ico" SourceFile="icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
-    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of SC Bridge HUD is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <UIRef Id="WixUI_InstallDir" />
-
-    <Feature Id="Main" Title="SC HUD" Level="1">
+    <Feature Id="Main" Title="SC Bridge HUD" Level="1">
       <ComponentGroupRef Id="AppFiles" />
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
@@ -27,16 +24,16 @@
 
   <Fragment>
     <StandardDirectory Id="ProgramFiles6432Folder">
-      <Directory Id="INSTALLFOLDER" Name="SC HUD" />
+      <Directory Id="INSTALLFOLDER" Name="SC Bridge HUD" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="AppMenuFolder" Name="SC HUD" />
+      <Directory Id="AppMenuFolder" Name="SC Bridge HUD" />
     </StandardDirectory>
   </Fragment>
 
   <Fragment>
     <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
-      <Files Include="$(var.PublishDir)\**" />
+      <Files Include="stage\**" />
     </ComponentGroup>
 
     <Component Id="StartMenuShortcut" Directory="AppMenuFolder">

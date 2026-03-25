@@ -48,13 +48,14 @@ jobs:
       - name: Build MSI installer
         shell: pwsh
         run: |
-          wix extension add WixToolset.UI.wixext/4.0.5
-          wix build installer\installer.wxs `
-            -ext WixToolset.UI.wixext `
-            -o "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
+          New-Item -ItemType Directory -Path "installer\stage" -Force | Out-Null
+          Copy-Item "artifacts\*" "installer\stage\" -Recurse -Force
+          Copy-Item "src\Assets\icon.ico" "installer\"
+          cd installer
+          wix build installer.wxs `
+            -o "..\SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
             -arch x64 `
-            -define ProductVersion=${{ steps.version.outputs.VERSION }} `
-            -define PublishDir=artifacts
+            -define ProductVersion=${{ steps.version.outputs.VERSION }}
 
       # Upload unsigned artifacts for SignPath (or direct release if signing not configured)
       - name: Upload unsigned artifacts
