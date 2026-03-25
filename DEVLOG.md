@@ -1,5 +1,19 @@
 # DEVLOG
 
+## 2026-03-25 — CI: GitHub Actions build workflow + MSI installer
+
+### Added
+- `.github/workflows/build.yml` — triggers on `v*` tags; runs `dotnet publish`
+  (self-contained, win-x64), packages a portable `.zip` and a WiX v4 `.msi`,
+  optionally signs via SignPath, uploads both to the GitHub Release.
+- `installer/installer.wxs` — WiX v4 installer: installs to `Program Files\SC HUD\`,
+  harvests all publish output recursively, adds Start Menu shortcut, supports
+  clean major upgrades. UpgradeCode GUID `14718258-65BF-4312-AEFA-812D695AF95F` is
+  fixed and must never change across versions.
+- To trigger a release: `git tag vX.X.X && git push origin vX.X.X`
+
+---
+
 ## 2026-03-25 — Release v0.2.0
 
 ### Changes
