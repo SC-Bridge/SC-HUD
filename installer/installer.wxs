@@ -16,7 +16,9 @@
     <MajorUpgrade DowngradeErrorMessage="A newer version of SC Bridge HUD is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER">
+      <ui:WixUILicenseRtf Value="license.rtf" />
+    </ui:WixUI>
 
     <Feature Id="Main" Title="SC Bridge HUD" Level="1">
       <ComponentGroupRef Id="AppFiles" />
