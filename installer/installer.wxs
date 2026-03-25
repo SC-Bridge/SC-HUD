@@ -11,9 +11,12 @@
 
     <Icon Id="AppIcon.ico" SourceFile="src\Assets\icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version of SC Bridge HUD is already installed." />
     <MediaTemplate EmbedCab="yes" />
+
+    <UIRef Id="WixUI_InstallDir" />
 
     <Feature Id="Main" Title="SC HUD" Level="1">
       <ComponentGroupRef Id="AppFiles" />
