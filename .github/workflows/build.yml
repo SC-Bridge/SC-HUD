@@ -53,8 +53,9 @@ jobs:
           Copy-Item "src\Assets\icon.ico" "installer\"
 
           # Generate AppFiles.wxs — explicit Component/File per staged file (WiX 4.x compatible)
+          # Exclude the runtimes\ subdirectory — root WebView2Loader.dll is identical and sufficient
           $stageDir = Resolve-Path "installer\stage"
-          $files = Get-ChildItem -Path $stageDir -Recurse -File
+          $files = Get-ChildItem -Path $stageDir -File
           $sb = [System.Text.StringBuilder]::new()
           [void]$sb.AppendLine('<?xml version="1.0" encoding="UTF-8"?>')
           [void]$sb.AppendLine('<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">')
@@ -64,7 +65,7 @@ jobs:
             $rel = $f.FullName.Substring($stageDir.Path.Length + 1)
             $id  = 'comp_' + ($rel -replace '[^a-zA-Z0-9]', '_')
             [void]$sb.AppendLine("      <Component Id=""$id"" Guid=""*"">")
-            [void]$sb.AppendLine("        <File Source=""stage\$rel"" />")
+            [void]$sb.AppendLine("        <File Id=""f_$id"" Source=""stage\$rel"" />")
             [void]$sb.AppendLine("      </Component>")
           }
           [void]$sb.AppendLine('    </ComponentGroup>')
