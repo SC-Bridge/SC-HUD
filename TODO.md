@@ -7,8 +7,6 @@
 - [ ] **Splash — ESC dismissal** — pressing ESC should also close the splash screen (currently only the configured toggle hotkey closes it).
 - [ ] **Splash — hotkey label reflects settings** — splash currently shows "F3" hardcoded; label and dismiss behaviour should reflect whatever hotkey the user has configured in settings.
 
-- [ ] **Test update banner** — install an older MSI release, then check for update to verify the banner appears, downloads, and restarts correctly.
-- [ ] **MSI update path** — `SelfUpdateService` replaces the raw `.exe`; if installed via MSI the replacement may fail silently due to `Program Files` write permissions. Symptom: Start Menu shortcut breaks because the MSI-managed exe is replaced outside the MSI database (Windows then points the shortcut at the temp copy). Proper fix: for MSI installs, download the new MSI and run it silently (`msiexec /i ... /quiet`) instead of replacing the exe directly. Needs detection of whether running from an MSI install vs portable.
 
 ## Known Issues
 
