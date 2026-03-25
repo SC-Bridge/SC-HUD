@@ -94,3 +94,6 @@ WaitForSingleObject
 GetModuleFileNameEx
 
 PostThreadMessage
+SendMessage
+PostMessage
+MSLLHOOKSTRUCT

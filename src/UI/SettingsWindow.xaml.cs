@@ -15,6 +15,7 @@ public partial class SettingsWindow : Window
 
     private readonly SettingsManager _settings;
     private readonly Action<byte>? _opacityPreview;
+    private readonly Action<byte>? _bgOpacityPreview;
     private readonly Action<int, int>? _sizePreview;
     private readonly Action<int>? _zoomPreview;
 
@@ -22,10 +23,11 @@ public partial class SettingsWindow : Window
     private KeyboardShortcut _recordedShortcut = KeyboardShortcut.None;
     private string _pendingUrl = ProdUrl;
 
-    public SettingsWindow(SettingsManager settings, Action<byte>? opacityPreview = null, Action<int, int>? sizePreview = null, Action<int>? zoomPreview = null)
+    public SettingsWindow(SettingsManager settings, Action<byte>? opacityPreview = null, Action<byte>? bgOpacityPreview = null, Action<int, int>? sizePreview = null, Action<int>? zoomPreview = null)
     {
         _settings = settings;
         _opacityPreview = opacityPreview;
+        _bgOpacityPreview = bgOpacityPreview;
         _sizePreview = sizePreview;
         _zoomPreview = zoomPreview;
         InitializeComponent();
@@ -52,6 +54,11 @@ public partial class SettingsWindow : Window
         var pct = (int)Math.Round(Math.Sqrt(linear) * 100);
         OpacitySlider.Value = Math.Clamp(pct, 10, 100);
         OpacityLabel.Text = $"{(int)OpacitySlider.Value}%";
+
+        var bgLinear = current.BackgroundOpacity / 255.0;
+        var bgPct = (int)Math.Round(Math.Sqrt(bgLinear) * 100);
+        BgOpacitySlider.Value = Math.Clamp(bgPct, 0, 100);
+        BgOpacityLabel.Text = $"{(int)BgOpacitySlider.Value}%";
 
         WidthSlider.Value  = Math.Clamp(current.WebViewWidthPct,  10, 100);
         HeightSlider.Value = Math.Clamp(current.WebViewHeightPct, 10, 100);
@@ -110,6 +117,15 @@ public partial class SettingsWindow : Window
         _opacityPreview?.Invoke((byte)Math.Round(linear * 255));
     }
 
+    private void OnBgOpacityChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (BgOpacityLabel is null) return;
+        BgOpacityLabel.Text = $"{(int)e.NewValue}%";
+
+        var linear = Math.Pow(e.NewValue / 100.0, 2);
+        _bgOpacityPreview?.Invoke((byte)Math.Round(linear * 255));
+    }
+
     // -------------------------------------------------------------------------
     // Size sliders
     // -------------------------------------------------------------------------
@@ -157,11 +173,15 @@ public partial class SettingsWindow : Window
         var linear = Math.Pow(OpacitySlider.Value / 100.0, 2);
         var opacityByte = (byte)Math.Round(linear * 255);
 
+        var bgLinear = Math.Pow(BgOpacitySlider.Value / 100.0, 2);
+        var bgOpacityByte = (byte)Math.Round(bgLinear * 255);
+
         var updated = _settings.Current with
         {
             OverlayUrl   = _pendingUrl,
             ToggleHotkey = _recordedShortcut,
             OverlayOpacity = opacityByte,
+            BackgroundOpacity = bgOpacityByte,
             WebViewWidthPct  = (int)WidthSlider.Value,
             WebViewHeightPct = (int)HeightSlider.Value,
             WebViewZoomPct   = (int)ZoomSlider.Value,
