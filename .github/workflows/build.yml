@@ -43,7 +43,9 @@ jobs:
           Copy-Item "artifacts\schud.exe" "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe"
 
       - name: Install WiX Toolset
-        run: dotnet tool install --global wix --version "4.*"
+        run: |
+          dotnet tool install --global wix --version "4.*"
+          wix extension add WixToolset.UI.wixext/4.0.5
 
       - name: Build MSI installer
         shell: pwsh
@@ -78,6 +80,7 @@ jobs:
 
           cd installer
           wix build installer.wxs AppFiles.wxs `
+            -ext WixToolset.UI.wixext `
             -o "..\SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
             -arch x64 `
             -define ProductVersion=${{ steps.version.outputs.VERSION }}
