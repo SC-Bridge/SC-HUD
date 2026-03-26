@@ -64,20 +64,26 @@ public partial class App : Application
         // First hotkey press closes the splash; subsequent presses just toggle.
         void OnFirstHotkey(object? s, EventArgs _)
         {
-            Dispatcher.Invoke(splash.Close);
+            // InvokeAsync — hook thread must not block waiting for the UI thread.
+            // Dispatcher.Invoke here would deadlock if the UI thread is busy.
+            Dispatcher.InvokeAsync(splash.Close);
             listener.HotkeyPressed -= OnFirstHotkey;
         }
         listener.HotkeyPressed += OnFirstHotkey;
 
         // Hotkey → toggle overlay; tray icon reflects overlay state
-        listener.HotkeyPressed      += (_, _) => Dispatcher.Invoke(overlay.Toggle);
+        // InvokeAsync throughout: these handlers fire from the WH_KEYBOARD_LL hook thread.
+        // Blocking that thread (Dispatcher.Invoke) violates the low-level hook contract
+        // (300 ms timeout) and deadlocks if the UI thread is simultaneously blocked in
+        // a SendMessage or other synchronous Win32 call.
+        listener.HotkeyPressed      += (_, _) => Dispatcher.InvokeAsync(overlay.Toggle);
         overlay.SettingsRequested   += (_, _) => Dispatcher.Invoke(() => OpenSettings(settings));
         overlay.OverlayShown        += (_, _) => _trayIcon.SetActive(true);
         overlay.OverlayHidden       += (_, _) => _trayIcon.SetActive(false);
         overlay.BalloonTipRequested += (title, msg) => _trayIcon.ShowBalloon(title, msg);
 
         // ESC closes the overlay and returns focus to SC.
-        listener.EscapePressed += (_, _) => Dispatcher.Invoke(overlay.EnsureHiddenRestoring);
+        listener.EscapePressed += (_, _) => Dispatcher.InvokeAsync(overlay.EnsureHiddenRestoring);
 
         // SC anchor — hide/restore the overlay in sync with the Star Citizen window.
         // Must be started on the UI thread so WINEVENT_OUTOFCONTEXT callbacks arrive here.

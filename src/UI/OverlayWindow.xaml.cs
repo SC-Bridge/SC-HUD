@@ -224,6 +224,7 @@ public partial class OverlayWindow : Window
     {
         _webViewReady = false;
         _navigationErrorShown = false;
+        _chromeHwnd = HWND.Null; // invalidate cached HWND — WebView2 may recreate its child windows
         WebView.CoreWebView2.Stop();
         WebView.CoreWebView2.Navigate(url);
         _logger.LogInformation("WebView2 restarted — navigating to {Url}", url);
@@ -490,7 +491,11 @@ public partial class OverlayWindow : Window
 
             if (_chromeHwnd != HWND.Null)
             {
-                PInvoke.SendMessage(_chromeHwnd, (uint)WM_MOUSEWHEEL, (nuint)(nint)wParam, lParam);
+                // PostMessage is used intentionally — SendMessage would block the UI thread
+                // while waiting for the Chrome host thread to process the wheel event.
+                // If WebView2 is busy (common during a live HUD session), SendMessage never
+                // returns, freezing the UI thread and deadlocking any concurrent Dispatcher.Invoke calls.
+                PInvoke.PostMessage(_chromeHwnd, (uint)WM_MOUSEWHEEL, (nuint)(nint)wParam, (nint)lParam);
                 handled = true;
             }
         }
