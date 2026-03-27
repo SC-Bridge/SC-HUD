@@ -137,6 +137,11 @@ public sealed class GlobalHotkeyListener : IHostedService, IDisposable
 
         if (isDown)
         {
+            // Prune phantom held keys before tracking the new key-down.
+            // WM_KEYUP events are silently dropped during screen lock, UAC prompts,
+            // and session switches — leaving stale entries in _heldKeys that cause
+            // SetEquals to never match the hotkey again until the app restarts.
+            _heldKeys.RemoveWhere(k => (WinPInvoke.GetAsyncKeyState((int)k) & 0x8000) == 0);
             _heldKeys.Add(vk);
             return;
         }

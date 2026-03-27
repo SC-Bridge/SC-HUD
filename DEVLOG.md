@@ -1,5 +1,17 @@
 # DEVLOG
 
+## 2026-03-27 — v0.3.14: Fix F3 hotkey stops working after screen lock / UAC
+
+### Bug fix
+
+**Symptom**: After running the HUD for 30–240 minutes, pressing F3 to restore the overlay does nothing. Restarting the HUD fixes it.
+
+**Root cause**: `GlobalHotkeyListener` tracked held keys in a `HashSet<VIRTUAL_KEY>` and matched the hotkey via `SetEquals` (exact match on key-up). Windows silently drops `WM_KEYUP` events for keys held during screen lock (Win+L), UAC elevation dialogs, Remote Desktop sessions, and other high-integrity process focus transitions. After one such event, a phantom key (e.g. `VK_LWIN`) sat in `_heldKeys` permanently — every subsequent F3 press produced `{VK_LWIN, VK_F3}` ≠ `{VK_F3}`, so the hotkey never fired.
+
+**Fix** (`src/Services/GlobalHotkeyListener.cs`): On each `WM_KEYDOWN`, prune stale entries from `_heldKeys` using `GetAsyncKeyState` before adding the new key. Any key the OS reports as not physically held is evicted, self-healing phantom state on the very next keypress.
+
+---
+
 ## 2026-03-25 — v0.3.9–0.3.12: MSI installer polish + MSI update path fix
 
 ### MSI installer fixes (v0.3.4–0.3.9)
