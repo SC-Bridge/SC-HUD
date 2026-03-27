@@ -1,5 +1,19 @@
 # DEVLOG
 
+## 2026-03-27 — v0.3.15: Fix MSI update does not relaunch app after install
+
+### Bug fix
+
+**Symptom**: After applying an MSI update, the app does not restart automatically.
+
+**Root cause**: `SelfUpdateService.ApplyMsiAsync` fired `msiexec.exe` as a fire-and-forget process then immediately called `quit()`. Nothing waited for the install to finish or relaunched the app afterward. (The portable path already had a PowerShell script that did `Start-Process` after the copy — the MSI path had no equivalent.)
+
+**Fix** (`src/Services/SelfUpdateService.cs`): Replaced the bare `Process.Start(msiexec)` with a PowerShell script (matching the portable approach) that: assigns the MSI and exe paths to variables, runs msiexec with `-Wait -PassThru`, then relaunches `schud.exe` on exit code 0 or 3010.
+
+Uses `$$"""..."""` raw string (C# 11) so that PowerShell `if` block braces are literal and C# interpolations use `{{...}}` syntax.
+
+---
+
 ## 2026-03-27 — v0.3.14: Fix F3 hotkey stops working after screen lock / UAC
 
 ### Bug fix

@@ -35,6 +35,9 @@ internal static class SelfUpdateService
 
     private static async Task ApplyMsiAsync(string msiUrl, Action quit, ILogger? log)
     {
+        var currentExe = Process.GetCurrentProcess().MainModule?.FileName
+            ?? Path.Combine(AppContext.BaseDirectory, "schud.exe");
+
         var tempDir = Path.Combine(Path.GetTempPath(), "schud_update");
         Directory.CreateDirectory(tempDir);
         var tempMsi = Path.Combine(tempDir, "schud_update.msi");
@@ -47,12 +50,31 @@ internal static class SelfUpdateService
         await src.CopyToAsync(dest);
         log?.LogInformation("MSI download complete — saved to {Msi}", tempMsi);
 
-        // /passive shows a progress bar; Windows handles UAC elevation for the perMachine install
+        // PowerShell script: run msiexec and wait for it to finish, then relaunch.
+        // Exit codes 0 (success) and 3010 (success, reboot suggested) both mean the
+        // install completed — relaunch in both cases since we pass /norestart.
+        // $$""" raw string: C# interpolations use {{...}}, so single { } are literal
+        // PowerShell braces and don't need doubling.
+        var script = $$"""
+            $msi = '{{tempMsi}}'
+            $exe = '{{currentExe}}'
+            $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /passive /norestart" -Wait -PassThru
+            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
+                Start-Sleep -Seconds 1
+                Start-Process $exe
+            }
+            """;
+
+        var scriptPath = Path.Combine(tempDir, "update.ps1");
+        await File.WriteAllTextAsync(scriptPath, script);
+        log?.LogInformation("MSI update script written to {Script} — launching and quitting", scriptPath);
+
         Process.Start(new ProcessStartInfo
         {
-            FileName        = "msiexec.exe",
-            Arguments       = $"/i \"{tempMsi}\" /passive /norestart",
+            FileName        = "powershell.exe",
+            Arguments       = $"-NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File \"{scriptPath}\"",
             UseShellExecute = true,
+            WindowStyle     = ProcessWindowStyle.Hidden,
         });
 
         quit();
