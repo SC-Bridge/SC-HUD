@@ -1,5 +1,8 @@
 # SC HUD
 
+[![Download Portable EXE](https://img.shields.io/badge/Download-Portable%20EXE-2ea44f?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/SC-HUD/releases/latest/download/SCBridgeHUD-portable.exe)
+[![Download MSI Installer](https://img.shields.io/badge/Download-MSI%20Installer-0078d4?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/SC-HUD/releases/latest/download/SCBridgeHUD-setup.msi)
+
 A lightweight Windows tray application that brings an embedded browser overlay over your game with a single keypress.
 
 Press **F3** while Star Citizen (or any configured game) is in focus → a transparent WebView2 browser window appears over the game, loading your configured URL. Press **F3** again → it disappears and the game regains focus.

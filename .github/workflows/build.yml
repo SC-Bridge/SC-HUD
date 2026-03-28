@@ -40,7 +40,7 @@ jobs:
       - name: Prepare portable exe
         shell: pwsh
         run: |
-          Copy-Item "artifacts\schud.exe" "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe"
+          Copy-Item "artifacts\schud.exe" "SCBridgeHUD-portable.exe"
 
       - name: Install WiX Toolset
         run: dotnet tool install --global wix --version "4.*"
@@ -80,7 +80,7 @@ jobs:
           wix extension add WixToolset.UI.wixext/4.0.5
           wix build installer.wxs AppFiles.wxs `
             -ext WixToolset.UI.wixext `
-            -o "..\SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" `
+            -o "..\SCBridgeHUD-setup.msi" `
             -arch x64 `
             -define ProductVersion=${{ steps.version.outputs.VERSION }}
 
@@ -91,8 +91,8 @@ jobs:
         with:
           name: unsigned-binaries
           path: |
-            SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe
-            SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi
+            SCBridgeHUD-portable.exe
+            SCBridgeHUD-setup.msi
 
       # SignPath code signing (skipped until SIGNPATH_ORGANIZATION_ID is configured)
       - name: Sign artifacts with SignPath
@@ -118,16 +118,16 @@ jobs:
           } else {
             Write-Host "Using unsigned artifacts (signing not configured)"
             New-Item -ItemType Directory -Path "release" -Force | Out-Null
-            Copy-Item "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe" "release\"
-            Copy-Item "SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi" "release\"
+            Copy-Item "SCBridgeHUD-portable.exe" "release\"
+            Copy-Item "SCBridgeHUD-setup.msi" "release\"
           }
 
       - name: Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/SCBridgeHUD-${{ steps.version.outputs.VERSION }}-portable.exe
-            release/SCBridgeHUD-${{ steps.version.outputs.VERSION }}-setup.msi
+            release/SCBridgeHUD-portable.exe
+            release/SCBridgeHUD-setup.msi
           generate_release_notes: true
           draft: false
         env:
