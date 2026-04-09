@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SC HUD — In-Game Browser Overlay for Star Citizen</title>
+  <meta name="description" content="Press F3 to open scbridge.app as a transparent overlay over Star Citizen. No alt-tab, no window switching. Free and open source." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #080c10;
+      --bg2:          #0d1117;
+      --surface:      #110f1e;
+      --surface2:     #1a1730;
+      --surface3:     #221e3d;
+      --border:       #1e1a35;
+      --border-lt:    #322d58;
+      --text:         #cdd9e5;
+      --text-dim:     #8b86b0;
+      --accent:       #a371f7;
+      --accent-lt:    #c19eff;
+      --radius:       8px;
+      --radius-lg:    14px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      font-size: 16px;
+      line-height: 1.65;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-lt); text-decoration: underline; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 0 28px; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(8,12,16,.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+    }
+    .nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .nav-logo:hover { text-decoration: none; color: var(--accent); }
+    .nav-logo span { color: var(--accent); }
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      list-style: none;
+    }
+    .nav-links a { font-size: 0.875rem; color: var(--text-dim); text-decoration: none; }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+    .nav-cta {
+      background: var(--accent);
+      color: #000 !important;
+      font-weight: 700;
+      font-size: 0.85rem !important;
+      padding: 7px 16px;
+      border-radius: var(--radius);
+      transition: background .15s;
+    }
+    .nav-cta:hover { background: var(--accent-lt) !important; text-decoration: none !important; }
+    @media (max-width: 600px) { .nav-links { display: none; } }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 96px 28px 72px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 12% 18%, rgba(255,255,255,.20) 0%, transparent 100%),
+        radial-gradient(1px 1px at 88% 14%, rgba(255,255,255,.18) 0%, transparent 100%),
+        radial-gradient(1px 1px at 38% 72%, rgba(255,255,255,.18) 0%, transparent 100%),
+        radial-gradient(1px 1px at 72% 52%, rgba(255,255,255,.15) 0%, transparent 100%),
+        radial-gradient(1px 1px at 25% 44%, rgba(255,255,255,.18) 0%, transparent 100%),
+        radial-gradient(1px 1px at 91% 78%, rgba(255,255,255,.15) 0%, transparent 100%),
+        radial-gradient(1px 1px at 58% 86%, rgba(255,255,255,.13) 0%, transparent 100%),
+        radial-gradient(ellipse 70% 50% at 50% 0%, rgba(163,113,247,.08) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(163,113,247,.1);
+      border: 1px solid rgba(163,113,247,.25);
+      color: var(--accent-lt);
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+    }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1.15;
+      color: #fff;
+      margin-bottom: 20px;
+    }
+    .hero h1 .highlight {
+      background: linear-gradient(90deg, var(--accent), var(--accent-lt));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 1.1rem;
+      color: var(--text-dim);
+      max-width: 580px;
+      margin: 0 auto 36px;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 14px 30px;
+      border-radius: var(--radius);
+      transition: background .15s, box-shadow .15s;
+      text-decoration: none;
+      box-shadow: 0 0 28px rgba(163,113,247,.25);
+    }
+    .btn-primary:hover {
+      background: var(--accent-lt);
+      box-shadow: 0 0 36px rgba(163,113,247,.38);
+      text-decoration: none;
+      color: #000;
+    }
+    .btn-primary svg { width: 18px; height: 18px; fill: #000; flex-shrink: 0; }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      background: transparent;
+      border: 1px solid var(--border-lt);
+      color: var(--text);
+      font-weight: 600;
+      font-size: 1rem;
+      padding: 13px 28px;
+      border-radius: var(--radius);
+      transition: border-color .15s, color .15s;
+      text-decoration: none;
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
+    .btn-secondary svg { width: 18px; height: 18px; fill: currentColor; flex-shrink: 0; }
+    .hero-meta { margin-top: 16px; font-size: 0.82rem; color: var(--text-dim); }
+
+    /* ── STATS BAR ── */
+    .stats-bar {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 28px;
+    }
+    .stats-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 32px;
+      border-right: 1px solid var(--border);
+    }
+    .stat:last-child { border-right: none; }
+    .stat-val { font-size: 1.5rem; font-weight: 800; color: var(--accent); line-height: 1; }
+    .stat-lbl { font-size: 0.75rem; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
+    @media (max-width: 540px) {
+      .stat { padding: 8px 18px; border-right: none; border-bottom: 1px solid var(--border); width: 50%; }
+    }
+
+    /* ── SECTIONS ── */
+    section { padding: 72px 0; border-bottom: 1px solid var(--border); }
+    .section-header { text-align: center; margin-bottom: 48px; }
+    .section-eyebrow {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 10px;
+    }
+    .section-header h2 {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -.4px;
+    }
+    .section-header p { color: var(--text-dim); max-width: 520px; margin: 12px auto 0; font-size: 0.95rem; }
+
+    /* ── FEATURE GRID ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 22px;
+      transition: border-color .2s, background .2s;
+    }
+    .feature-card:hover { border-color: var(--border-lt); background: var(--surface2); }
+    .feat-icon {
+      width: 42px; height: 42px;
+      border-radius: var(--radius);
+      background: var(--surface3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 14px;
+    }
+    .feature-card h3 { font-size: 0.95rem; font-weight: 600; color: #fff; margin-bottom: 6px; }
+    .feature-card p  { font-size: 0.855rem; color: var(--text-dim); line-height: 1.55; }
+
+    /* ── STEPS ── */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .step-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 22px;
+    }
+    .step-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-lt));
+      color: #000;
+      font-weight: 800;
+      font-size: 0.95rem;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 14px;
+      box-shadow: 0 0 16px rgba(163,113,247,.28);
+    }
+    .step-card h3 { font-size: 0.95rem; font-weight: 600; color: #fff; margin-bottom: 8px; }
+    .step-card p  { font-size: 0.855rem; color: var(--text-dim); line-height: 1.55; }
+
+    /* ── CONFIG TABLE ── */
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .config-table th {
+      text-align: left;
+      padding: 10px 16px;
+      background: var(--surface2);
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .config-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .config-table tr:last-child td { border-bottom: none; }
+    .config-table tr:hover td { background: var(--surface); }
+    .config-table td:first-child { color: var(--accent); font-family: "Consolas", monospace; font-size: 0.84rem; }
+    .config-table td:nth-child(2) { color: var(--text); }
+    .config-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    /* ── NOTES ── */
+    .note-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .note-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid #d29922;
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      line-height: 1.55;
+    }
+    .note-card strong { color: var(--text); display: block; margin-bottom: 4px; }
+
+    /* ── FROM SOURCE ── */
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      font-family: "Consolas", "Cascadia Code", monospace;
+      font-size: 0.855rem;
+      overflow-x: auto;
+      color: #cdd9e5;
+      line-height: 1.7;
+    }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      background: linear-gradient(135deg, var(--surface2) 0%, var(--surface3) 100%);
+      border: 1px solid var(--border-lt);
+      border-radius: var(--radius-lg);
+      padding: 52px 40px;
+      text-align: center;
+      margin: 72px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .cta-banner::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 60% 80% at 50% 120%, rgba(163,113,247,.09) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .cta-banner h2 { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 700; color: #fff; margin-bottom: 12px; }
+    .cta-banner p  { color: var(--text-dim); font-size: 0.975rem; max-width: 440px; margin: 0 auto 28px; }
+
+    /* ── FOOTER ── */
+    footer { border-top: 1px solid var(--border); padding: 32px 28px; text-align: center; }
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .footer-links a { color: var(--text-dim); font-size: 0.875rem; text-decoration: none; }
+    .footer-links a:hover { color: var(--accent); text-decoration: none; }
+    .footer-legal { font-size: 0.78rem; color: var(--text-dim); opacity: .6; }
+
+    /* ── SUPPORT ── */
+    .support-section {
+      padding: 72px 28px;
+      text-align: center;
+    }
+    .support-section p {
+      color: var(--text-dim);
+      max-width: 480px;
+      margin: 12px auto 32px;
+      font-size: 1rem;
+    }
+    .btn-kofi {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #29ABE0;
+      color: #fff;
+      font-weight: 700;
+      font-size: 1rem;
+      padding: 14px 30px;
+      border-radius: var(--radius);
+      transition: background .15s, box-shadow .15s;
+      text-decoration: none;
+      box-shadow: 0 0 24px rgba(41,171,224,.2);
+    }
+    .btn-kofi:hover {
+      background: #52c3ef;
+      box-shadow: 0 0 36px rgba(41,171,224,.35);
+      text-decoration: none;
+      color: #fff;
+    }
+    .btn-kofi svg { width: 22px; height: 22px; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">🪟 SC <span>HUD</span></a>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How It Works</a></li>
+        <li><a href="#configuration">Configuration</a></li>
+        <li><a href="#support">Support</a></li>
+        <li><a href="https://github.com/SC-Bridge/SC-HUD" target="_blank">GitHub</a></li>
+        <li>
+          <a class="nav-cta" href="https://github.com/SC-Bridge/SC-HUD/releases/latest/download/schud.exe">
+            Download
+          </a>
+        </li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="container">
+      <div class="hero-eyebrow">✦ Star Citizen Companion &nbsp;·&nbsp; Free &amp; Open Source</div>
+      <h1>
+        Stay in the Game.<br>
+        <span class="highlight">Your HUD, One Keypress Away.</span>
+      </h1>
+      <p class="hero-sub">
+        SC HUD brings a transparent browser overlay to your game window.
+        Press F3 to open scbridge.app over Star Citizen — no alt-tab, no window switching,
+        session already logged in.
+      </p>
+      <div class="hero-actions">
+        <a class="btn-primary" href="https://github.com/SC-Bridge/SC-HUD/releases/latest/download/schud.exe">
+          <svg viewBox="0 0 16 16"><path d="M7.47 10.78a.75.75 0 0 0 1.06 0l3.75-3.75a.75.75 0 0 0-1.06-1.06L8.75 8.44V1.75a.75.75 0 0 0-1.5 0v6.69L4.78 5.97a.75.75 0 0 0-1.06 1.06l3.75 3.75ZM3.75 13a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+          Download SC HUD
+        </a>
+        <a class="btn-secondary" href="https://github.com/SC-Bridge/SC-HUD" target="_blank">
+          <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+          View on GitHub
+        </a>
+      </div>
+      <p class="hero-meta">Windows 10 / 11 &nbsp;·&nbsp; No installer &nbsp;·&nbsp; WebView2 required (pre-installed on Win 11)</p>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stats-inner">
+      <div class="stat">
+        <span class="stat-val">F3</span>
+        <span class="stat-lbl">Default Hotkey</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">90%</span>
+        <span class="stat-lbl">Default Opacity</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">0ms</span>
+        <span class="stat-lbl">Re-auth Delay</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">Win 10/11</span>
+        <span class="stat-lbl">Platform</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- FEATURES -->
+    <section id="features">
+      <div class="section-header">
+        <div class="section-eyebrow">What it does</div>
+        <h2>Everything you need, nothing you don't</h2>
+        <p>A single, focused tool. Open your browser overlay, use it, close it — without ever leaving the game.</p>
+      </div>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feat-icon">⌨️</div>
+          <h3>Instant Toggle</h3>
+          <p>Press your configured hotkey to show or hide the overlay without touching the mouse. Default is F3.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🔐</div>
+          <h3>Persistent Sessions</h3>
+          <p>WebView2 preserves cookies and auth across every toggle. You're always already logged in.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🪟</div>
+          <h3>Transparent Overlay</h3>
+          <p>The browser floats on top of your game with no background. Adjust opacity and size to taste.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🎮</div>
+          <h3>Focus-Aware</h3>
+          <p>The overlay automatically hides when Star Citizen loses focus so it's never in the way.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🔧</div>
+          <h3>Configurable Hotkey</h3>
+          <p>F3 not working for you? Change the toggle key to any key combination from the Settings menu.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">📥</div>
+          <h3>System Tray</h3>
+          <p>Runs quietly in the background. Right-click the tray icon to access Settings or quit at any time.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🚀</div>
+          <h3>Start with Windows</h3>
+          <p>Optional auto-start so SC HUD is always ready when you launch your game. Toggle in Settings.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feat-icon">🛡️</div>
+          <h3>Smart Navigation</h3>
+          <p>An allowed-origins whitelist keeps the overlay within permitted domains. Safe by default.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section id="how-it-works">
+      <div class="section-header">
+        <div class="section-eyebrow">The process</div>
+        <h2>Up and running in minutes</h2>
+        <p>No installer, no configuration wizard — download, run, press F3.</p>
+      </div>
+      <div class="steps">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <h3>Download &amp; Run</h3>
+          <p>Download <code>schud.exe</code> and run it. No installation required. WebView2 is pre-installed on Windows 11.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <h3>Configure</h3>
+          <p>Right-click the tray icon → <strong>Settings</strong>. Set your overlay URL (default: <code>scbridge.app</code>).</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <h3>Launch Your Game</h3>
+          <p>Start Star Citizen and get into the game as normal.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">4</div>
+          <h3>Press F3</h3>
+          <p>The overlay appears over your game, already logged in and ready to use.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-num">5</div>
+          <h3>Press F3 Again</h3>
+          <p>Overlay hides instantly. Game focus returns. You never left.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONFIGURATION -->
+    <section id="configuration">
+      <div class="section-header">
+        <div class="section-eyebrow">Settings</div>
+        <h2>Configure it your way</h2>
+        <p>All settings are accessible from the system tray. They're stored in <code>%APPDATA%\schud\settings.json</code>.</p>
+      </div>
+      <div class="config-wrap">
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>Setting</th>
+              <th>Default</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ToggleHotkey</td>
+              <td>F3</td>
+              <td>Key combination to show and hide the overlay.</td>
+            </tr>
+            <tr>
+              <td>GameProcessName</td>
+              <td>StarCitizen.exe</td>
+              <td>Process to monitor for focus detection.</td>
+            </tr>
+            <tr>
+              <td>OverlayUrl</td>
+              <td>https://scbridge.app</td>
+              <td>The URL displayed in the overlay browser.</td>
+            </tr>
+            <tr>
+              <td>AllowedOrigins</td>
+              <td>*.scbridge.app</td>
+              <td>Domains the embedded browser is permitted to navigate to.</td>
+            </tr>
+            <tr>
+              <td>OverlayOpacity</td>
+              <td>230 (90%)</td>
+              <td>Overlay transparency, 0–255. Lower = more transparent.</td>
+            </tr>
+            <tr>
+              <td>HideWhenGameLosesFocus</td>
+              <td>true</td>
+              <td>Auto-hide the overlay when the game is minimised or unfocused.</td>
+            </tr>
+            <tr>
+              <td>AutoStartWithWindows</td>
+              <td>false</td>
+              <td>Launch SC HUD automatically at Windows startup.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section id="notes">
+      <div class="section-header">
+        <div class="section-eyebrow">Good to know</div>
+        <h2>Notes &amp; requirements</h2>
+      </div>
+      <div class="note-grid">
+        <div class="note-card">
+          <strong>WebView2 Runtime required</strong>
+          Windows 11 ships with WebView2 pre-installed. Windows 10 users may need to download the
+          Microsoft Edge WebView2 Runtime from the Microsoft website before running SC HUD.
+        </div>
+        <div class="note-card">
+          <strong>Run as Administrator (recommended)</strong>
+          Star Citizen uses Easy Anti-Cheat and runs as an elevated process. Running SC HUD as
+          administrator allows proper focus-return when the overlay is hidden.
+        </div>
+        <div class="note-card">
+          <strong>EAC compatibility</strong>
+          SC HUD does not inject into the game or modify game memory. It is a standalone overlay
+          using a separate WebView2 window positioned on top of the game.
+        </div>
+      </div>
+    </section>
+
+    <!-- FROM SOURCE -->
+    <section id="source">
+      <div class="section-header">
+        <div class="section-eyebrow">Developers</div>
+        <h2>Run from source</h2>
+      </div>
+      <pre><code>git clone https://github.com/SC-Bridge/SC-HUD
+cd SC-HUD
+dotnet run --project src/schud</code></pre>
+      <p style="margin-top: 14px; color: var(--text-dim); font-size: 0.875rem;">
+        Requires .NET 9.0 SDK and Windows 10 / 11 x64.
+        Build a self-contained executable with <code>dotnet publish -c Release -r win-x64 --self-contained</code>.
+      </p>
+    </section>
+
+    <!-- SUPPORT -->
+    <section id="support" class="support-section">
+      <div class="container">
+        <div class="section-eyebrow" style="display:inline-block; margin-bottom:16px;">Open Source &amp; Free Forever</div>
+        <h2 style="font-size:clamp(1.5rem,3vw,2.2rem); font-weight:800; color:#fff; margin-bottom:0;">Support the project</h2>
+        <p>SC HUD is free and will stay that way. If you enjoy using it and want to show your appreciation, supporting us on Ko-fi means a lot.</p>
+        <a class="btn-kofi" href="https://ko-fi.com/scbridge" target="_blank">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>
+          Support on Ko-fi
+        </a>
+      </div>
+    </section>
+
+    <!-- CTA BANNER -->
+    <div class="cta-banner">
+      <h2>Ready to stop alt-tabbing?</h2>
+      <p>Free download. No installer. Run the exe and press F3.</p>
+      <a class="btn-primary" href="https://github.com/SC-Bridge/SC-HUD/releases/latest/download/schud.exe">
+        <svg viewBox="0 0 16 16"><path d="M7.47 10.78a.75.75 0 0 0 1.06 0l3.75-3.75a.75.75 0 0 0-1.06-1.06L8.75 8.44V1.75a.75.75 0 0 0-1.5 0v6.69L4.78 5.97a.75.75 0 0 0-1.06 1.06l3.75 3.75ZM3.75 13a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5Z"/></svg>
+        Download SC HUD
+      </a>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://ko-fi.com/scbridge" target="_blank">Ko-fi</a>
+        <a href="https://github.com/SC-Bridge/SC-HUD" target="_blank">GitHub</a>
+        <a href="https://github.com/SC-Bridge/SC-HUD/releases" target="_blank">Releases</a>
+        <a href="https://github.com/SC-Bridge/SC-HUD/issues" target="_blank">Report a Bug</a>
+      </div>
+      <p class="footer-legal">
+        Made by <a href="https://ko-fi.com/scbridge" target="_blank" style="color:var(--text-dim)">SC Bridge</a>
+        &nbsp;·&nbsp;
+        Not affiliated with Cloud Imperium Games or Roberts Space Industries.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>
